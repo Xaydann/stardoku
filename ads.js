@@ -15,6 +15,7 @@
 import { AdMob } from '@capacitor-community/admob';
 import { InAppPurchase2 as Store2 } from '@ionic-native/in-app-purchase-2';
 import { Preferences } from '@capacitor/preferences';
+import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
 
 /* ---------- 1. Your IDs ---------------------------------------------
    Keep the test IDs while developing. Clicking your own live ads will
@@ -46,7 +47,7 @@ let interstitialReady = false;
 let rewardedReady     = false;
 let consentDone       = false;
 
-const REMOVE_ADS = 'stardoku.removeads';   // must match App Store Connect exactly
+const REMOVE_ADS = 'stardoku.removead';    // must match App Store Connect exactly
 const CLOUD_KEY  = 'stardoku.save.v1';
 let iapReady     = false;
 let ownsAdFree   = false;
@@ -58,7 +59,9 @@ let productPrice = null;
 function initPurchases() {
   try {
     Store2.verbosity = Store2.QUIET;
-    Store2.register({ id: REMOVE_ADS, type: Store2.NON_CONSUMABLE });
+    // Match the type to App Store Connect. A consumable cannot be restored,
+    // so if you switch the product to non-consumable, change this too.
+    Store2.register({ id: REMOVE_ADS, type: Store2.CONSUMABLE });
     Store2.when(REMOVE_ADS).updated((p) => {
       if (p.title || p.price) productPrice = p.price || productPrice;
       if (p.owned) ownsAdFree = true;
@@ -179,7 +182,11 @@ async function boot() {
           const p = Store2.get(id);
           if (!p) return resolve(false);
           Store2.once(id).approved((o) => { o.verify(); });
-          Store2.once(id).verified((o) => { o.finish(); ownsAdFree = true; resolve(true); });
+          Store2.once(id).verified((o) => {
+        o.finish();               // consumables must be finished or they re-fire
+        ownsAdFree = true;
+        resolve(true);
+      });
           Store2.once(id).cancelled(() => resolve(false));
           Store2.once(id).error(() => resolve(false));
           Store2.order(id);
@@ -218,7 +225,24 @@ async function boot() {
     // Filled in if you add Game Center; see SHIPPING_GUIDE part 3.
     leaderboard: { available: () => false, submit: () => {}, show: () => {} },
 
-    haptic: (ms) => { try { navigator.vibrate && navigator.vibrate(ms || 6); } catch (e) {} }
+    /* ---- Haptics -------------------------------------------------
+       Real Taptic Engine feedback on iPhone. The game asks for a kind,
+       not a duration, because iOS has named feedback generators rather
+       than a vibration motor you time yourself.                        */
+    haptic: (kind) => {
+      try {
+        switch (kind) {
+          case 'tick':    return void Haptics.selectionChanged();
+          case 'light':   return void Haptics.impact({ style: ImpactStyle.Light });
+          case 'medium':  return void Haptics.impact({ style: ImpactStyle.Medium });
+          case 'heavy':   return void Haptics.impact({ style: ImpactStyle.Heavy });
+          case 'success': return void Haptics.notification({ type: NotificationType.Success });
+          case 'warning': return void Haptics.notification({ type: NotificationType.Warning });
+          case 'error':   return void Haptics.notification({ type: NotificationType.Error });
+          default:        return void Haptics.impact({ style: ImpactStyle.Light });
+        }
+      } catch (e) { /* device without a Taptic Engine, or haptics disabled in iOS settings */ }
+    }
   };
 }
 

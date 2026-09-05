@@ -789,7 +789,7 @@ body { margin:0; color:var(--ink); overscroll-behavior:none; user-select:none;
   <div class="set-row"><div><div class="set-label">Bigger text</div><div class="set-sub">Increases type size throughout</div></div><div class="switch" id="sw-bigtext"></div></div>
   <div class="section-label">Motion and feel</div>
   <div class="set-row"><div><div class="set-label">Sound</div><div class="set-sub">Chimes and the dial click</div></div><div class="switch" id="sw-sound"></div></div>
-  <div class="set-row"><div><div class="set-label">Vibration</div><div class="set-sub">A tick as the dial passes each mode. Android only; iPhone has no web API for this.</div></div><div class="switch" id="sw-haptic"></div></div>
+  <div class="set-row"><div><div class="set-label">Vibration</div><div class="set-sub">A tick as the dial passes each mode, and feedback when a star lands</div></div><div class="switch" id="sw-haptic"></div></div>
   <div class="set-row"><div><div class="set-label">Reduce motion</div><div class="set-sub">Calms animations across the game</div></div><div class="switch" id="sw-motion"></div></div>
   <div class="set-row"><div><div class="set-label">Sky turns right</div><div class="set-sub">Which way the menu stars drift as you spin the dial</div></div><div class="switch" id="sw-skydir"></div></div>
   <div class="section-label" id="sec-store" style="display:none">Store</div>
@@ -2070,14 +2070,40 @@ function tone(f,d,g,t){ if(!state.soundOn)return; try{ if(!actx)actx=new (window
   gn.gain.setValueAtTime(0,actx.currentTime); gn.gain.linearRampToValueAtTime(g||.05,actx.currentTime+.008);
   gn.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+d); o.connect(gn); gn.connect(actx.destination); o.start(); o.stop(actx.currentTime+d); }
 const sfxMark=()=>tone(620,.045,.02,'triangle');
-function buzz(ms){
-  // Android exposes the Vibration API. iOS Safari does not, so on iPhone the
-  // click is audio only; there is no web API for the Taptic engine.
+let lastSweepHaptic=0;
+/* One tick per square while sweeping, but never closer than 45ms. A fast drag
+   crosses a whole row in a fraction of a second, and one buzz per cell with no
+   floor is a blur rather than a ratchet. */
+function sweepHaptic(){
+  const now=Date.now();
+  if(now-lastSweepHaptic<45) return;
+  lastSweepHaptic=now;
+  haptic('tick');
+}
+/* Haptics.
+   In a browser the only thing available is navigator.vibrate, which Android
+   honours and iOS Safari ignores entirely. Wrapped in Capacitor, iOS exposes
+   the real Taptic Engine through @capacitor/haptics, and SDBridge.haptic
+   forwards to it. Same call sites either way; the shell decides what is
+   possible.
+   Kinds map onto Apple's feedback generators:
+     tick    -> selection changed        (the dial passing a mode)
+     light   -> a small confirmed action (a star lands)
+     heavy   -> something big            (the board collapsing)
+     success / warning / error -> notification feedback                     */
+const HAPTIC_MS={tick:6, light:10, medium:18, heavy:30,
+                 success:[12,40,18], warning:[16,60,16], error:[26,50,26]};
+function haptic(kind){
   const p=Store.get();
   if(p.haptics===false) return;
-  try{ if(navigator.vibrate) navigator.vibrate(ms||6); }catch(e){}
+  const B=window.SDBridge;
+  if(B&&B.isNative&&typeof B.haptic==='function'){
+    try{ B.haptic(kind||'light'); return; }catch(e){}
+  }
+  try{ if(navigator.vibrate) navigator.vibrate(HAPTIC_MS[kind||'light']||10); }catch(e){}
 }
-const sfxTick=()=>{ tone(2100,.016,.011,'square'); setTimeout(()=>tone(1400,.013,.007,'square'),7); buzz(6); };
+function buzz(ms){ haptic(ms>=20?'medium':'tick'); }   // kept for older call sites
+const sfxTick=()=>{ tone(2100,.016,.011,'square'); setTimeout(()=>tone(1400,.013,.007,'square'),7); haptic('tick'); };
 const sfxUnmark=()=>tone(360,.05,.018,'triangle');
 const sfxStar=()=>[660,880,1170].forEach((f,i)=>setTimeout(()=>tone(f,.24,.042),i*55));
 const sfxWrong=()=>tone(150,.22,.05,'sawtooth');
@@ -3030,7 +3056,7 @@ function buyObs(c){
   else if(c.kind==='sky') p.mapStyle=c.item.id;
   else if(c.kind==='title') p.title=c.item.id;
   Store.save();
-  sfxStar(); buzz(14);
+  sfxStar(); haptic('success');
   toast(c.item.name+' is yours.');
   renderObsCaption(); renderObsStrip();   // the shelf itself does not change
 }
@@ -3112,7 +3138,13 @@ function submitScores(){
 /* ================= REMOVE ADS =================
    A single non-consumable. Apple requires a visible Restore control for these,
    and rejects builds without one, so both live in Settings together. */
-const IAP_REMOVE_ADS='stardoku.removeads';
+const IAP_REMOVE_ADS='stardoku.removead';
+/* 'consumable' or 'nonconsumable'. Set this to whatever the product actually
+   is in App Store Connect, because it changes what the UI may promise.
+   A consumable cannot be restored, so offering a Restore button for one would
+   be a button that never works. */
+const IAP_TYPE='consumable';
+const IAP_RESTORABLE=(IAP_TYPE==='nonconsumable');
 function iapAvailable(){ const B=window.SDBridge; return !!(B&&B.isNative&&B.iap.available()); }
 function adFreePrice(){ const B=window.SDBridge;
   return (iapAvailable()&&B.iap.price(IAP_REMOVE_ADS))||'\u00a32.99'; }
@@ -3137,7 +3169,7 @@ async function restorePurchases(){
 function grantAdFree(msg){
   const p=Store.get(); p.noAds=true; Store.save();
   cloudPush();
-  toast(msg); sfxStar();
+  toast(msg); sfxStar(); haptic('success');
 }
 
 /* ================= CLOUD SAVE =================
@@ -3209,10 +3241,14 @@ function renderSettings(){
            <div class="set-sub">A one-off purchase. Removes every ad, including the
            optional ones. Nothing else changes: no puzzles, cosmetics or stardust
            are locked behind it.</div></div>
-           <button class="text-btn" id="btn-removeads" style="color:var(--gold)">${adFreePrice()}</button></div>
-         <div class="set-row"><div><div class="set-label">Restore purchases</div>
-           <div class="set-sub">If you have bought this before on this Apple ID</div></div>
-           <button class="text-btn" id="btn-restore">RESTORE</button></div>`;
+           <button class="text-btn" id="btn-removeads" style="color:var(--gold)">${adFreePrice()}</button></div>`
+        + (IAP_RESTORABLE
+           ? `<div class="set-row"><div><div class="set-label">Restore purchases</div>
+                <div class="set-sub">If you have bought this before on this Apple ID</div></div>
+                <button class="text-btn" id="btn-restore">RESTORE</button></div>`
+           : `<div class="set-row"><div><div class="set-label">Keep it safe</div>
+                <div class="set-sub">Turn on iCloud sync below and this purchase travels
+                with your save to a new phone.</div></div></div>`);
     const b1=document.getElementById('btn-removeads'), b2=document.getElementById('btn-restore');
     if(b1) b1.addEventListener('click',buyRemoveAds);
     if(b2) b2.addEventListener('click',restorePurchases);
@@ -3411,12 +3447,12 @@ function paintCell(i){
     if(state.cellState[i]!==CELL_MARKED)return;      // never wipe a star
     state.cellState[i]=CELL_EMPTY;
     pushUndo({index:i,prev:CELL_MARKED,next:CELL_EMPTY,heartCost:false,strokeId:pointer.strokeId});
-    renderCell(i); sfxUnmark(); noteMarkRemoved();
+    renderCell(i); sfxUnmark(); sweepHaptic(); noteMarkRemoved();
   } else {
     if(state.cellState[i]!==CELL_EMPTY)return;       // never paint over a star
     state.cellState[i]=CELL_MARKED;
     pushUndo({index:i,prev:CELL_EMPTY,next:CELL_MARKED,heartCost:false,strokeId:pointer.strokeId});
-    renderCell(i,'mark'); sfxMark(); noteMarkUsed();
+    renderCell(i,'mark'); sfxMark(); sweepHaptic(); noteMarkUsed();
   }
   tutorialProgress(); checkFullMark();
 }
@@ -3449,7 +3485,7 @@ function doubleTap(i){ if(!(i>=0&&i<state.N*state.N))return;
   if(state.solutionSet.has(i)){
     state.cellState[i]=CELL_STAR;
     pushUndo({index:i,prev:cur,next:CELL_STAR,heartCost:false});
-    renderCell(i,'star'); celebrate(i); sfxStar();
+    renderCell(i,'star'); celebrate(i); sfxStar(); haptic('light');
     if(state.hintCtx) Hint.ctxPlace(state.hintCtx,i);
     tutorialProgress(); saveRun(); checkWin();
   } else {
@@ -3458,7 +3494,7 @@ function doubleTap(i){ if(!(i>=0&&i<state.N*state.N))return;
     renderHearts(state.hearts); renderCell(i,'mark');
     const c=boardEl.children[i]; c.classList.remove('shake','wrong-flash'); void c.offsetWidth;
     c.classList.add('shake','wrong-flash'); setTimeout(()=>c.classList.remove('shake','wrong-flash'),470);
-    sfxWrong(); saveRun(); state.lastWrong=i; if(state.hearts<=0) lose(); } }
+    sfxWrong(); haptic('error'); saveRun(); state.lastWrong=i; if(state.hearts<=0) lose(); } }
 function handleTap(i){ const now=Date.now();
   if(lastTap.cell===i&&now-lastTap.time<DOUBLE_TAP_MS){ lastTap={cell:null,time:0}; doubleTap(i); }
   else { lastTap={cell:i,time:now}; singleTap(i); } }
@@ -3966,7 +4002,7 @@ function playCollapse(from,done){
       c.classList.add('swallowed');
     },delay);
   }
-  setTimeout(()=>{ tone(70,.9,.05,'sine'); },120);
+  setTimeout(()=>{ tone(70,.9,.05,'sine'); haptic('heavy'); },120);
   setTimeout(()=>{
     boardEl.querySelectorAll('.swallowed').forEach(c=>{ c.classList.remove('swallowed'); c.style.removeProperty('--tx'); c.style.removeProperty('--ty'); });
     hole.remove(); done&&done();
@@ -4003,7 +4039,7 @@ function announceUnlocks(gained){
        </div>
      </div>`).join('');
   openModal('modal-unlock');
-  sfxStar();
+  sfxStar(); haptic('success');
 }
 
 /* ================= win / lose ================= */
@@ -4020,7 +4056,7 @@ function awardDust(){ if(state.assisted||state.mode==='training'||state.replay) 
   const p=Store.get(); p.stardust=(p.stardust||0)+gain; Store.save(); return gain; }
 function checkWin(){ if(state.review)return; let n=0; for(const s of state.cellState) if(s===CELL_STAR)n++;
   if(n!==state.N)return;
-  state.solved=true; stopTimer(); sfxWin(); closeHint(); closeTutorial(); syncButtons();
+  state.solved=true; stopTimer(); sfxWin(); haptic('success'); closeHint(); closeTutorial(); syncButtons();
   const p=Store.get();
   if(state.mode!=='training'&&!state.replay){
     p.stars.push({tech:state.tech,N:state.N,mode:state.mode,assisted:!!state.assisted,
@@ -4858,7 +4894,7 @@ function init(){
   toggle('sw-letters',p=>{ p.regionLetters=!p.regionLetters;
     if(boardEl&&state.regionOf){ buildBoard(); paintStatic(); for(let i=0;i<state.N*state.N;i++)renderCell(i); } });
   toggle('sw-bigtext',p=>{ p.bigText=!p.bigText; });
-  toggle('sw-haptic',p=>{ p.haptics=(p.haptics===false); if(p.haptics)buzz(10); });
+  toggle('sw-haptic',p=>{ p.haptics=(p.haptics===false); if(p.haptics) haptic('medium'); });
   toggle('sw-motion',p=>{ p.reduceMotion=!p.reduceMotion; });
   toggle('sw-skydir',p=>{ p.skyDir=(p.skyDir===-1)?1:-1; turnSky(); });
   toggle('sw-cloud',p=>{ p.cloudSync=(p.cloudSync===false); if(p.cloudSync) cloudPush(); });
@@ -4888,7 +4924,7 @@ window.__STARDOKU__={ SD, Hint, BANK, Store, state, beginPuzzle, getVoyagePuzzle
   unlockState, showIntro, INTROS, LOCK_MSG, dialModes, renderDial, pickDial, buildLesson,
   currentDialIdx, renderHero, dialGeom, drawDialSky, turnSky, buildSky, drawHomeSky, homeSkyGeom, runSplash, maybeCoach, coachNext, COACH_STEPS,
   startTraining, startFree, startVoyage, startDaily, startSingularity, getSingularityPuzzle,
-  playFinale, constellationOrder, playCollapse, showScreen, runMomentum, sfxTick, buzz, paintStatic, renderObsStrip, renderObsFoot,
+  playFinale, constellationOrder, playCollapse, showScreen, runMomentum, sfxTick, buzz, haptic, HAPTIC_MS, sweepHaptic, IAP_TYPE, IAP_RESTORABLE, paintStatic, renderObsStrip, renderObsFoot,
   comboOK, CUSTOM_OK, deriveChunked, firstTechFor, customBudget, startCustom,
   ADS, adsOn, maybeInterstitial, watchRewarded, submitScores, reviveRun, afterResult, countSolve,
   IAP_REMOVE_ADS, iapAvailable, buyRemoveAds, restorePurchases, grantAdFree, renderSettings,

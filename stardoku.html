@@ -41,7 +41,9 @@
 }
 * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 html,body { height:100%; }
-body { margin:0; color:var(--ink); overscroll-behavior:none; user-select:none;
+body { margin:0; color:var(--ink); overscroll-behavior:none;
+  user-select:none; -webkit-user-select:none; -moz-user-select:none; -ms-user-select:none;
+  -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent;
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",ui-sans-serif,system-ui,sans-serif;
   background:
     radial-gradient(1100px 620px at 18% -8%, rgba(96,80,190,.20), transparent 62%),
@@ -649,6 +651,12 @@ body { margin:0; color:var(--ink); overscroll-behavior:none; user-select:none;
     animation-duration:.001ms !important; animation-iteration-count:1 !important;
     transition-duration:80ms !important; }
 
+  
+  .noads-chip { display:block; margin:4px auto 0; background:rgba(232,198,106,.12);
+    border:1px solid rgba(232,198,106,.45); color:var(--gold); border-radius:999px;
+    padding:3px 12px; font-size:9.5px; letter-spacing:1.6px; font-family:inherit;
+    cursor:pointer; font-weight:600; }
+  .noads-chip:active { transform:scale(.94); }
   @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; } }
 </style>
 </head>
@@ -675,7 +683,8 @@ body { margin:0; color:var(--ink); overscroll-behavior:none; user-select:none;
   <div id="screen-home" class="screen active">
     <div class="home-bar">
       <button class="icon-btn" id="btn-howto" aria-label="How to play"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.2a2.5 2.5 0 114.2 2.1c-.9.7-1.8 1.2-1.8 2.4"/><circle cx="12" cy="17.2" r=".9" fill="currentColor"/></svg></button>
-      <div class="home-brand"><span class="wordmark display-face">STARDOKU</span></div>
+      <div class="home-brand"><span class="wordmark display-face">STARDOKU</span>
+        <button class="noads-chip" id="btn-noads-home" style="display:none">REMOVE ADS</button></div>
       <button class="icon-btn" id="btn-settings" aria-label="Settings"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.34 1.87l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1 1.55V21a2 2 0 01-4 0v-.09A1.7 1.7 0 009 19.4a1.7 1.7 0 00-1.87.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.7 1.7 0 004.6 15a1.7 1.7 0 00-1.55-1H3a2 2 0 010-4h.09A1.7 1.7 0 004.6 9a1.7 1.7 0 00-.34-1.87l-.06-.06a2 2 0 112.83-2.83l.06.06A1.7 1.7 0 009 4.6a1.7 1.7 0 001-1.55V3a2 2 0 014 0v.09a1.7 1.7 0 001 1.55 1.7 1.7 0 001.87-.34l.06-.06a2 2 0 112.83 2.83l-.06.06A1.7 1.7 0 0019.4 9a1.7 1.7 0 001.55 1H21a2 2 0 010 4h-.09a1.7 1.7 0 00-1.55 1z"/></svg></button>
     </div>
     <svg id="home-sky" preserveAspectRatio="none"></svg>
@@ -705,7 +714,7 @@ body { margin:0; color:var(--ink); overscroll-behavior:none; user-select:none;
       <svg class="ps-svg" id="ps-svg" viewBox="0 0 240 34" preserveAspectRatio="xMidYMid meet"></svg>
     </div>
     <div class="board-wrap"><div id="board"></div></div>
-    <p class="hint"><b>Drag</b> to sweep X's on and off &nbsp;·&nbsp; <b>Double-tap</b> to place a star</p>
+    <p class="hint"><b>Double-tap</b> to place a star</p>
     <div class="controls-row">
       <button class="ctrl-btn" id="btn-undo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 015 5v0a5 5 0 01-5 5h-1"/></svg>UNDO</button>
       <button class="ctrl-btn" id="btn-restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>RESET</button>
@@ -816,6 +825,12 @@ body { margin:0; color:var(--ink); overscroll-behavior:none; user-select:none;
   <div class="set-row" id="row-privacy-choices" style="display:none"><div><div class="set-label">Privacy choices</div><div class="set-sub">Change how ads may use your data</div></div><button class="text-btn" id="btn-privacy-choices">MANAGE</button></div>
   <div class="set-row"><div><div class="set-label">Privacy policy</div><div class="set-sub">What the game and its ads collect</div></div><button class="text-btn" id="btn-privacy-policy">OPEN</button></div>
   <div class="set-sub" id="app-version" style="text-align:center;margin-top:14px;color:var(--ink-faint)"></div>
+  <!-- Hidden support panel: tap the version line 5 times to show it. -->
+  <div id="sec-diag" style="display:none">
+    <div class="section-label">Diagnostics</div>
+    <div class="set-row"><div style="flex:1"><div class="set-label">Ads and purchases</div>
+      <div class="set-sub" id="diag-body" style="word-break:break-word">checking…</div></div></div>
+  </div>
 </div></div>
 
 <div class="backdrop" id="modal-tiers"><div class="card" style="text-align:left">
@@ -1003,6 +1018,7 @@ body { margin:0; color:var(--ink); overscroll-behavior:none; user-select:none;
   <div class="sheet-actions">
     <button class="btn btn-ghost" id="hint-back" style="flex:.55">BACK</button>
     <button class="btn btn-ghost" id="hint-close" style="flex:.55">CLOSE</button>
+    <button class="btn btn-ghost" id="hint-skip" style="flex:.7;display:none">SKIP</button>
     <button class="btn btn-primary" id="hint-next">NEXT</button>
   </div>
 </div></div>
@@ -1040,7 +1056,13 @@ body { margin:0; color:var(--ink); overscroll-behavior:none; user-select:none;
   window.__sdState = function(patch){
     if(!patch || typeof patch !== 'object') return;
     for(var k in patch) if(k !== 'error') S[k] = patch[k];
-    if(patch.error) try{ console.warn('[native] ' + patch.error); }catch(e){}
+    if(patch.error){
+      try{ console.warn('[native] ' + patch.error); }catch(e){}
+      /* Kept for the hidden Settings diagnostics panel: TestFlight has no
+         console, so this is the only way to read what the ad SDK said. */
+      var t = new Date(); var hh = ('0'+t.getHours()).slice(-2)+':'+('0'+t.getMinutes()).slice(-2);
+      S.errors = (S.errors || []).concat(hh + ' ' + String(patch.error).slice(0, 220)).slice(-6);
+    }
     /* A purchase made or restored natively is the source of truth: mirror it
        into the save so every ad check in the game sees it immediately. */
     if(patch.owned === true && typeof Store !== 'undefined'){
@@ -1054,6 +1076,7 @@ body { margin:0; color:var(--ink); overscroll-behavior:none; user-select:none;
   window.SDBridge = {
     isNative: true,
     get appVersion(){ return S.appVersion || null; },
+    diag: function(){ var o = {}; for(var k in S) o[k] = S[k]; return o; },
     ads: {
       ready: function(){ return !!(S.interstitialReady || S.rewardedReady); },
       interstitialReady: function(){ return !!S.interstitialReady; },
@@ -2105,7 +2128,7 @@ function starInner(style){
     case 'burst':   return `<polygon points="${STAR_PTS}" fill="currentColor"/><path d="M50 2v14M50 84v14M2 50h14M84 50h14" stroke="currentColor" stroke-width="6" stroke-linecap="round" opacity=".75"/>`;
     case 'tiny':    return `<g transform="translate(50,50) scale(.42) translate(-50,-50)"><polygon points="${STAR_PTS}" fill="currentColor"/></g>`;
     case 'smiley':  return `<circle cx="50" cy="50" r="34" fill="currentColor"/><circle cx="39" cy="43" r="5" fill="var(--void-0)"/><circle cx="61" cy="43" r="5" fill="var(--void-0)"/><path d="M36 60q14 13 28 0" stroke="var(--void-0)" stroke-width="5.5" fill="none" stroke-linecap="round"/>`;
-    case 'cracked': return `<polygon points="${STAR_PTS}" fill="currentColor"/><path d="M50 14 L41 44 L57 53 L43 82 M57 29 L74 39 M41 45 L22 41 M53 57 L72 68" stroke="var(--void-0)" stroke-width="6" fill="none" stroke-linecap="round"/>`;
+    case 'cracked': return `<defs><mask id="crk"><rect x="0" y="0" width="100" height="100" fill="#fff"/><path d="M50 14 L41 44 L57 53 L43 82 M57 29 L74 39 M41 45 L22 41 M53 57 L72 68" stroke="#000" stroke-width="5" fill="none" stroke-linecap="round"/></mask></defs><polygon points="${STAR_PTS}" fill="currentColor" mask="url(#crk)"/>`;
     case 'crystal': return `<polygon points="50,10 61,32 85,28 71,50 85,72 61,68 50,90 39,68 15,72 29,50 15,28 39,32" fill="currentColor"/>`;
     case 'prismatic': return `<defs><linearGradient id="prg" x1="0" y1="0" x2="1" y2="1">
         <stop offset="0%" stop-color="#FF8A7A"/><stop offset="35%" stop-color="#FFE08A"/>
@@ -3267,7 +3290,9 @@ function iapAvailable(){ const B=window.SDBridge; return !!(B&&B.isNative&&B.iap
 function adFreePrice(){ const B=window.SDBridge;
   return (iapAvailable()&&B.iap.price(IAP_REMOVE_ADS))||'\u00a32.99'; }
 async function buyRemoveAds(){
-  if(!iapAvailable()){ toast('Purchases are not available here.'); return; }
+  const B=window.SDBridge;
+  if(!B||!B.isNative){ toast('Purchases are not available here.'); return; }
+  if(!iapAvailable()) toast('Contacting the App Store\u2026');
   const btn=document.getElementById('btn-removeads');
   if(btn){ btn.disabled=true; btn.textContent='\u2026'; }
   let ok=false;
@@ -3277,7 +3302,8 @@ async function buyRemoveAds(){
   renderSettings();
 }
 async function restorePurchases(){
-  if(!iapAvailable()){ toast('Purchases are not available here.'); return; }
+  const B=window.SDBridge;
+  if(!B||!B.isNative){ toast('Purchases are not available here.'); return; }
   let ok=false;
   try{ ok=await window.SDBridge.iap.restore(); }catch(e){ ok=false; }
   if(ok) grantAdFree('Purchase restored.');
@@ -3348,31 +3374,39 @@ async function cloudPull(){
 
 function renderSettings(){
   const p=Store.get();
+  renderDiag();
   const secStore=document.getElementById('sec-store'), rows=document.getElementById('store-rows');
-  if(iapAvailable()){
+  const B=window.SDBridge;
+  const native=!!(B&&B.isNative);
+  const ready=iapAvailable();
+
+  /* The Store section appears only when StoreKit has actually returned the
+     product, or the player already owns it. A buy button that can never work
+     is itself a 2.1(b) rejection, and a release without the purchase attached
+     must not show one at all. When the product is live it appears by itself. */
+  if(native && (ready || p.noAds)){
     secStore.style.display=''; rows.style.display='';
-    rows.innerHTML = p.noAds
-      ? `<div class="set-row"><div><div class="set-label">Ads removed</div>
+    if(p.noAds){
+      rows.innerHTML = `<div class="set-row"><div><div class="set-label">Ads removed</div>
            <div class="set-sub">Thank you. Every ad in the game is switched off.</div></div>
-           <div style="color:var(--gold);font-size:18px">\u2713</div></div>`
-      : `<div class="set-row"><div><div class="set-label">Remove ads</div>
+           <div style="color:var(--gold);font-size:18px">\u2713</div></div>`;
+    } else {
+      const label = adFreePrice();
+      rows.innerHTML = `<div class="set-row"><div><div class="set-label">Remove ads</div>
            <div class="set-sub">A one-off purchase. Removes every ad, including the
            optional ones. Nothing else changes: no puzzles, cosmetics or stardust
            are locked behind it.</div></div>
-           <button class="text-btn" id="btn-removeads" style="color:var(--gold)">${adFreePrice()}</button></div>`
-        + (IAP_RESTORABLE
-           ? `<div class="set-row"><div><div class="set-label">Restore purchases</div>
+           <button class="text-btn" id="btn-removeads" style="color:var(--gold)">${label}</button></div>
+         <div class="set-row"><div><div class="set-label">Restore purchases</div>
                 <div class="set-sub">If you have bought this before on this Apple ID</div></div>
-                <button class="text-btn" id="btn-restore">RESTORE</button></div>`
-           : `<div class="set-row"><div><div class="set-label">Keep it safe</div>
-                <div class="set-sub">Turn on iCloud sync below and this purchase travels
-                with your save to a new phone.</div></div></div>`);
-    const b1=document.getElementById('btn-removeads'), b2=document.getElementById('btn-restore');
-    if(b1) b1.addEventListener('click',buyRemoveAds);
-    if(b2) b2.addEventListener('click',restorePurchases);
+                <button class="text-btn" id="btn-restore">RESTORE</button></div>`;
+      const b1=document.getElementById('btn-removeads'), b2=document.getElementById('btn-restore');
+      if(b1) b1.addEventListener('click',buyRemoveAds);
+      if(b2) b2.addEventListener('click',restorePurchases);
+    }
   } else { secStore.style.display='none'; rows.style.display='none'; }
 
-  const B=window.SDBridge, cloudRow=document.getElementById('row-cloud');
+  const cloudRow=document.getElementById('row-cloud');
   if(B&&B.cloud.available()){
     cloudRow.style.display='';
     document.getElementById('sw-cloud').classList.toggle('on',p.cloudSync!==false);
@@ -3383,7 +3417,7 @@ function renderSettings(){
   const rb=document.getElementById('btn-reset-progress');
   if(rb){ rb.textContent='ERASE'; rb.dataset.armed=''; }
   const vs=document.getElementById('app-version');
-  if(vs) vs.textContent=(B&&B.appVersion)?('Stardoku '+B.appVersion):'';
+  if(vs) vs.textContent='Stardoku'+((B&&B.appVersion)?(' '+B.appVersion):'');
 }
 function openPrivacyPolicy(){
   const B=window.SDBridge;
@@ -3395,6 +3429,40 @@ async function openPrivacyChoices(){
   if(!B||!B.privacy) return;
   try{ await B.privacy.showOptions(); }catch(e){}
   renderSettings();
+}
+
+
+/* On-device diagnostics. TestFlight gives no console, so a bridge that failed
+   to install is otherwise invisible: it just looks like ads and purchases are
+   broken. This says plainly which side is at fault. */
+function renderDiag(){
+  const sec=document.getElementById('sec-diag');
+  if(sec) sec.style.display=Store.get().showDiag?'':'none';
+  const el=document.getElementById('diag-body');
+  if(!el||!Store.get().showDiag) return;
+  const B=window.SDBridge;
+  if(!B||!B.isNative){ el.textContent='Not running inside the iOS app: ads and purchases are off here (expected in a browser).'; return; }
+  const D=(typeof B.diag==='function')?B.diag():{};
+  const yn=v=>v===undefined?'?':(v?'yes':'no');
+  const p=Store.get();
+  const rows=[
+    ['bridge', 'native'],
+    ['ad mode', D.adMode||'?'],
+    ['consent', D.consent||'?'],
+    ['can request ads', yn(D.canRequestAds)],
+    ['ads started', yn(D.adsStarted)],
+    ['tracking', D.att||'?'],
+    ['interstitial loaded', yn(D.interstitialReady)],
+    ['rewarded loaded', yn(D.rewardedReady)],
+    ['ads removed', yn(!!p.noAds)],
+    ['puzzles toward next ad', ((p.adCounter||0)%ADS.interstitialEvery)+' of '+ADS.interstitialEvery],
+    ['store ready', yn(D.storeReady)],
+    ['price', D.price||'none']
+  ];
+  const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  let html=rows.map(r=>esc(r[0])+': <b>'+esc(r[1])+'</b>').join(' \u00b7 ');
+  if(D.errors&&D.errors.length) html+='<br>Recent errors:<br>'+D.errors.map(esc).join('<br>');
+  el.innerHTML=html;
 }
 
 /* ================= dates ================= */
@@ -3512,6 +3580,9 @@ function beginPuzzle(p,mode,label,opts){
   const sing=(mode==='singularity'||mode==='freesing');
   state.hearts=sing?1:3; state.noMarks=sing; state.assisted=false; state.helped=false; state.elapsedBase=0; state.newAchievements=[];
   state.replay=!!opts.replay; state.review=false; state.marksUsed=false;
+  state.lastPuz=p; state.lastTitle=label;
+  if(typeof skipTimer!=='undefined'&&skipTimer){ clearTimeout(skipTimer); skipTimer=null; }
+  const sk=document.getElementById('hint-skip'); if(sk) sk.style.display='none';
   document.getElementById('hearts').style.display='';
   state.hintCtx=Hint.makeCtx(p.N,p.regionOf);
   lastTap={cell:null,time:0};
@@ -3645,6 +3716,7 @@ function doUndo(){ if(state.solved||state.failed)return;
 function paintCell(i){
   if(!(i>=0&&i<state.N*state.N))return;
   if(state.noMarks)return;
+  if(state.tut&&!tutAllows(i))return;      // silent during a sweep
   if(pointer.painted.has(i))return; pointer.painted.add(i);
   if(pointer.erasing){
     if(state.cellState[i]!==CELL_MARKED)return;      // never wipe a star
@@ -3661,7 +3733,10 @@ function paintCell(i){
 }
 function singleTap(i){ if(!(i>=0&&i<state.N*state.N))return;
   if(state.review)return;
-  if(state.noMarks){ toast('No marks in Singularity.'); return; }
+  if(state.tut&&!tutAllows(i)){ tutNudge(); return; }
+  // In Singularity a tap is only ever the first half of a double-tap, so
+  // complaining about marks here fired every time a star was placed.
+  if(state.noMarks) return;
   const cur=state.cellState[i];
   if(cur===CELL_EMPTY){ state.cellState[i]=CELL_MARKED;
     // remember what the flag was, so a double-tap can undo the transient mark
@@ -3682,9 +3757,11 @@ function rollbackSingle(i){ const last=state.undoStack[state.undoStack.length-1]
     } } }
 function doubleTap(i){ if(!(i>=0&&i<state.N*state.N))return;
   if(state.review)return;
+  if(state.tut&&!tutAllows(i)){ tutNudge(); return; }
   rollbackSingle(i); const cur=state.cellState[i];
-  if(cur===CELL_STAR){ state.cellState[i]=CELL_EMPTY;
-    pushUndo({index:i,prev:CELL_STAR,next:CELL_EMPTY,heartCost:false}); renderCell(i); sfxUnmark(); saveRun(); return; }
+  // A placed star is always correct, so taking it off again achieves nothing
+  // and only invites misclicks. Undo still exists for genuine mistakes.
+  if(cur===CELL_STAR) return;
   if(state.solutionSet.has(i)){
     state.cellState[i]=CELL_STAR;
     pushUndo({index:i,prev:cur,next:CELL_STAR,heartCost:false});
@@ -3749,6 +3826,7 @@ function nextUnfoundDeduction(){
   while(guard++<3000){
     const d=Hint.nextDeduction(state.hintCtx);
     if(!d||d.kind==='dead') return null;
+    if(state.review) return d;          // walk the whole solve, skip nothing
     let already=false;
     if(d.kind==='single') already=(state.cellState[d.cell]===CELL_STAR);
     else { const elim=(d.kind==='contradiction')?[d.cell]:d.elim;
@@ -3874,7 +3952,7 @@ async function requestExplain(){
   openModal('modal-explain-warn'); }
 function runExplain(){
   closeModal('modal-explain-warn');
-  const tidy=pendingMarks();
+  const tidy=state.review?null:pendingMarks();
   if(tidy){
     state.hintWalk={kicker:'TIDY UP FIRST',apply:'eliminate',tidy:tidy.cells,steps:[
       {text:'Your star at <em>'+Hint.pos(state.N,tidy.star)+'</em> already rules squares out, but they are not marked yet.',focus:[tidy.star]},
@@ -3920,6 +3998,40 @@ function advanceHint(){ const w=state.hintWalk; if(!w)return;
     if(n<state.N){ setTimeout(runExplain,260); return; }
     toast('That is the whole solution.'); return; }
   checkWin(); }
+/* Plays out the remaining deductions in sequence, fast and without commentary,
+   so the player still sees how the board resolves. Each move is applied the
+   same way Explain applies it, so it cannot desync or stall. */
+let skipTimer=null;
+function skipWalkthrough(){
+  if(skipTimer) return;
+  closeHint();
+  document.getElementById('hint-skip').style.display='none';
+  toast('Playing out the solution.');
+  const step=()=>{
+    const d=nextUnfoundDeduction();
+    if(!d||d.kind==='dead'){
+      skipTimer=null;
+      let n=0; for(const c of state.cellState) if(c===CELL_STAR)n++;
+      toast(n>=state.N?'That is the whole solution.':'Solution complete.');
+      return;
+    }
+    const res=Hint.apply(state.hintCtx,d);
+    const sid=++strokeCounter;
+    if(res.place!==undefined && state.cellState[res.place]===CELL_EMPTY){
+      state.cellState[res.place]=CELL_STAR;
+      pushUndo({index:res.place,prev:CELL_EMPTY,next:CELL_STAR,heartCost:false,strokeId:sid});
+      renderCell(res.place,'star'); celebrate(res.place); sfxStar();
+    }
+    if(res.eliminate){ for(const i of res.eliminate){ if(state.cellState[i]===CELL_EMPTY){
+        state.cellState[i]=CELL_MARKED;
+        pushUndo({index:i,prev:CELL_EMPTY,next:CELL_MARKED,heartCost:false,strokeId:sid});
+        renderCell(i,'mark'); } }
+      sfxMark(); }
+    saveRun();
+    skipTimer=setTimeout(step,240);
+  };
+  step();
+}
 function closeHint(){ const p=document.getElementById('hint-panel');
   if(p)p.classList.remove('active'); clearHighlights(); state.hintWalk=null; state.hintStep=0; }
 
@@ -4115,6 +4227,29 @@ function movePanel(panel,toTop){
   panel.style.transform = toTop ? `translateY(${-(vh-h)}px)` : 'translateY(0)';
 }
 function tutorialBack(){ if(state.tut&&state.tutStep>0){ state.tutStep--; showTutStep(); } }
+/* During a tutorial the board only accepts the move being taught. An
+   informational step locks the board entirely so the player reads it and
+   presses NEXT. This stops people wandering off-script and getting stuck. */
+function tutAllows(i){
+  const t=state.tut; if(!t) return true;
+  const st=t.steps[state.tutStep]; if(!st) return true;
+  if(!st.await) return false;
+  if(st.await.type==='star') return i===st.await.cell;
+  if(st.await.type==='mark'){
+    if(st.kill && st.kill.length) return st.kill.indexOf(i)>=0;
+    return true;
+  }
+  return true;
+}
+let tutNudgeAt=0;
+function tutNudge(){
+  const now=Date.now(); if(now-tutNudgeAt<1200) return; tutNudgeAt=now;
+  const t=state.tut, st=t&&t.steps[state.tutStep];
+  if(!st) return;
+  if(!st.await) toast('Read this step, then press NEXT.');
+  else if(st.await.type==='star') toast('Double tap the glowing square.');
+  else toast('Mark the highlighted squares.');
+}
 function tutorialProgress(){ const t=state.tut; if(!t)return;
   const st=t.steps[state.tutStep]; if(!st||!st.await)return;
   if(st.await.type==='star'&&state.cellState[st.await.cell]===CELL_STAR) advanceTutorial();
@@ -4408,18 +4543,29 @@ function showResult(failed){
   bind('r-home',()=>afterResult(()=>{ stopTimer(); refreshMenu(); showScreen('home'); }));
   bind('r-cal',()=>afterResult(()=>{ refreshMenu(); showScreen('home'); openCalendar(); }));
   bind('r-explain',()=>{ closeModal('modal-result');
-    // Review mode: the puzzle stays lost, no hearts are handed back and the
-    // board is read-only. Explain simply chains through the whole solution.
     state.review=true; state.failed=false; state.solved=false;
     document.getElementById('hearts').style.display='none';
-    syncButtons(); toast('Read-only. Stepping through the whole solution.');
+    // Wipe the player's attempt and rebuild the solver from scratch so the
+    // walkthrough can always reach the end.
+    state.cellState=new Array(state.N*state.N).fill(CELL_EMPTY);
+    state.undoStack=[];
+    state.hintCtx=Hint.makeCtx(state.N,state.regionOf);
+    for(let i=0;i<state.N*state.N;i++) renderCell(i);
+    syncButtons();
+    document.getElementById('hint-skip').style.display='';
+    toast('Read-only. Stepping through the whole solution.');
     runExplain(); });
   bind('r-revive',reviveRun);
   bind('r-again',()=>afterResult(()=>{
-    if(state.mode==='singularity') startSingularity();
-    else if(state.mode==='voyage'){ clearRun(); withLoader('CHARTING THE SKY',()=>beginPuzzle(getVoyagePuzzle(state.voyageLevel),'voyage','VOYAGE '+state.voyageLevel,{fresh:true}),['v',state.voyageLevel]); }
-    else if(state.mode==='training') startTraining(state.trainTech);
-    else startFree(state.freeTier); }));
+    if(state.mode==='singularity'){ startSingularity(); return; }
+    if(state.mode==='voyage'){ clearRun();
+      withLoader('CHARTING THE SKY',()=>beginPuzzle(getVoyagePuzzle(state.voyageLevel),'voyage','VOYAGE '+state.voyageLevel,{fresh:true}),['v',state.voyageLevel]); return; }
+    if(state.mode==='training'){ startTraining(state.trainTech); return; }
+    if(state.lastPuz){
+      const p=state.lastPuz, m=state.mode, t=state.lastTitle;
+      withLoader('CHARTING THE SKY',()=>beginPuzzle(p,m,t,{fresh:true}));
+      return; }
+    startFree(state.freeTier); }));
   bind('r-next',()=>afterResult(()=>{
     if(state.mode==='voyage'){ state.voyageLevel++;
       const pr=Store.get(); pr.voyageLevel=Math.max(pr.voyageLevel,state.voyageLevel); Store.save();
@@ -4488,7 +4634,7 @@ let cbN=6, cbT=2, cbSing=false;
      4x4 L4  never                      -> blocked                          */
 const CUSTOM_OK={
   4:[1,1,1,0,1], 5:[1,1,1,1,1], 6:[1,1,1,1,1], 7:[1,1,1,1,1],
-  8:[0,1,1,1,1], 9:[0,0,1,1,1], 10:[0,0,1,1,1]
+  8:[1,1,1,1,1], 9:[0,0,1,1,1], 10:[0,0,1,1,1]
 };
 /* Deliberately modest shape budgets. A 10x10 at budget 1800 takes half a
    second PER ATTEMPT, and since the search runs on the main thread that is
@@ -4497,11 +4643,16 @@ const CUSTOM_OK={
 function customBudget(n){ return n<=5?260 : n<=6?600 : n<=7?900 : n<=8?800 : 700; }
 function comboOK(n,t){ const r=CUSTOM_OK[n]; return !!(r&&r[t-1]); }
 function firstTechFor(n){ for(let t=1;t<=5;t++) if(comboOK(n,t)) return t; return 3; }
-function customDust(N,t){
+const CUSTOM_DUST_MAX = 4+5*7+(10-4)*4;      // a 10x10 at L5, the hardest build
+function customDust(N,t,sing){
   // A tiny board that only needs the easiest idea is a warm-up, not a
   // challenge, so it pays nothing. Everything else scales with both.
   if(N<5&&t<2) return 0;
-  return 4+t*7+(N-4)*4;
+  const base=4+t*7+(N-4)*4;
+  if(!sing) return base;
+  // One life and no marks is a different order of difficulty, so the reward
+  // curves steeply and tops out at 1000 for the hardest board in the game.
+  return Math.round(1000*Math.pow(base/CUSTOM_DUST_MAX,2));
 }
 function renderCustomBoard(){
   if(!comboOK(cbN,cbT)) cbT=firstTechFor(cbN);      // keep the selection legal
@@ -4519,7 +4670,7 @@ function renderCustomBoard(){
     const okT=comboOK(cbN,t);
     return `<button class="chip${t===cbT?' on':''}${okT?'':' dead'}" data-cbt="${t}"${okT?'':' disabled'}>L${t}</button>`;}).join('');
   document.getElementById('cb-techname').textContent=TECHNIQUE_NAMES[cbT];
-  const d=customDust(cbN,cbT);
+  const d=customDust(cbN,cbT,cbSing);
   const blocked=[1,2,3,4,5].filter(t=>!comboOK(cbN,t));
   document.getElementById('cb-reward').innerHTML =
     (d>0 ? `Worth <b>${d}</b> stardust if you solve it unaided.`
@@ -4574,7 +4725,7 @@ function startCustom(){
                 {N:N,budget:budget,minTech:T,maxTech:T}, 15000, (p)=>{
     loader.classList.remove('active');
     if(!p){ toast('Could not build that board. Try another combination.'); openCustomBoard(); return; }
-    state.custom={N:N,tech:T,dust:customDust(N,p.tech)};
+    state.custom={N:N,tech:T,dust:customDust(N,p.tech,sing)};
     if(p.tech!==T) toast('Closest match needs '+TECHNIQUE_NAMES[p.tech].toLowerCase()+'.');
     beginPuzzle(p, sing?'freesing':'custom',
       N+'\u00d7'+N+' \u00b7 L'+p.tech+(sing?' \u00b7 SINGULARITY':''), {fresh:true});
@@ -4974,6 +5125,10 @@ function runMomentum(){
   dialMom=requestAnimationFrame(step);
 }
 function refreshMenu(){ dialLastIdx=-1; renderDial(true);
+  const nc=document.getElementById('btn-noads-home');
+  if(nc){ const B=window.SDBridge;
+    // Only when the product really loaded: a chip leading to no purchase is a rejection.
+    nc.style.display=(B&&B.isNative&&!Store.get().noAds&&iapAvailable())?'':'none'; }
   const ob=document.getElementById('obs-badge');
   if(ob){ const fresh=obsItems().some(c=>!shopOwned()[c.item.id]);
     ob.style.display=fresh?'block':'none'; }
@@ -5050,6 +5205,10 @@ function init(){
     e.target.value=v; Store.get().name=v||'NAVIGATOR'; Store.save(); renderStarMap(); });
   attachMapPointer();
   $('btn-settings').addEventListener('click',()=>{ renderSettings(); openModal('modal-settings'); });
+  $('btn-noads-home').addEventListener('click',()=>{
+    renderSettings(); openModal('modal-settings');
+    setTimeout(()=>{ const r=document.getElementById('sec-store');
+      if(r&&r.scrollIntoView) r.scrollIntoView({block:'center'}); },120); });
   $('btn-howto').addEventListener('click',()=>{ const p=Store.get(); p.seenHowto=true; Store.save();
     const hp=BANK.training[1];
     document.getElementById('howto-pic').innerHTML=miniBoardSVG(hp,{stars:hp.solutionCells});
@@ -5066,6 +5225,7 @@ function init(){
   $('explain-cancel').addEventListener('click',()=>closeModal('modal-explain-warn'));
   $('hint-next').addEventListener('click',advanceHint);
   $('hint-close').addEventListener('click',closeHint);
+  $('hint-skip').addEventListener('click',skipWalkthrough);
   $('tut-next').addEventListener('click',advanceTutorial);
   $('tut-back').addEventListener('click',tutorialBack);
   $('hint-back').addEventListener('click',hintBack);
@@ -5084,12 +5244,18 @@ function init(){
     if(p2.seen) delete p2.seen.map; Store.save(); showIntro('map'); });
   $('cal-play').addEventListener('click',startDaily);
   $('cb-play').addEventListener('click',startCustom);
-  $('unlock-open').addEventListener('click',()=>{ closeModal('modal-unlock'); openWardrobe('home'); });
+  $('unlock-open').addEventListener('click',()=>{
+    closeModal('modal-unlock'); closeModal('modal-result');
+    stopTimer(); refreshMenu(); openWardrobe('home'); });
   $('cal-prev').addEventListener('click',()=>{ calMonth=new Date(calMonth.getFullYear(),calMonth.getMonth()-1,1); renderCalendar(); });
   $('cal-next').addEventListener('click',()=>{ calMonth=new Date(calMonth.getFullYear(),calMonth.getMonth()+1,1); renderCalendar(); });
   document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>closeModal(b.dataset.close)));
+  // Tapping outside dismisses a popup, except the ones that are the only way
+  // forward. Dismissing the result card used to strand the player on a dead
+  // board with no option but the menu.
+  const NO_TAP_OUT={'modal-result':1,'modal-unlock':1,'modal-intro':1};
   document.querySelectorAll('.backdrop').forEach(bd=>bd.addEventListener('pointerdown',e=>{
-    if(e.target===bd) bd.classList.remove('active');   // tap outside to dismiss
+    if(e.target===bd && !NO_TAP_OUT[bd.id]) bd.classList.remove('active');
   }));
   function applyPrefs(){
     const p=Store.get();
@@ -5120,6 +5286,12 @@ function init(){
   applyPrefs();
   $('btn-privacy-policy').addEventListener('click',openPrivacyPolicy);
   $('btn-privacy-choices').addEventListener('click',openPrivacyChoices);
+  /* Five taps on the version line toggles the hidden diagnostics panel. */
+  let diagTaps=0, diagTapAt=0;
+  $('app-version').addEventListener('click',()=>{
+    const now=Date.now(); diagTaps=(now-diagTapAt<1500)?diagTaps+1:1; diagTapAt=now;
+    if(diagTaps>=5){ diagTaps=0; const p=Store.get(); p.showDiag=!p.showDiag; Store.save();
+      renderSettings(); toast(p.showDiag?'Diagnostics shown.':'Diagnostics hidden.'); } });
   /* Erase used to fire on one tap. Now the first tap arms it, the second
      (within 4s) erases. The purchase survives: it was paid for. */
   let resetTimer=null;
@@ -5159,6 +5331,7 @@ window.__STARDOKU__={ SD, Hint, BANK, Store, state, beginPuzzle, getVoyagePuzzle
   handleTap, singleTap, doubleTap, paintCell, pointer, doUndo, checkWin, renderCell, lose, showTutStep, movePanel,
   openHintMenu, useHint, requestExplain, runExplain, advanceHint, closeHint, pendingMarks,
   nextUnfoundDeduction, startTutorial, advanceTutorial, tutorialScript, closeTutorial,
+  tutAllows, tutNudge, skipWalkthrough, customDust, comboOK,
   saveRun, loadRun, clearRun, runKey, renderCalendar, openCalendar, refreshMenu, dust, COST,
   constellationPoints, constellationEdges, fitBox, stripPoints, parSeconds, estPercentile,
   MapView, buildNodes, renderStarMap, visibleRect, scheduleMapRedraw, exoticSVG, selectNode, closeStarDetail, zoomMap, fitMap, exoticPos,
@@ -5171,7 +5344,7 @@ window.__STARDOKU__={ SD, Hint, BANK, Store, state, beginPuzzle, getVoyagePuzzle
   playFinale, constellationOrder, playCollapse, showScreen, runMomentum, sfxTick, buzz, haptic, HAPTIC_MS, sweepHaptic, IAP_TYPE, IAP_RESTORABLE, paintStatic, renderObsStrip, renderObsFoot,
   comboOK, CUSTOM_OK, deriveChunked, firstTechFor, customBudget, startCustom,
   ADS, adsOn, maybeInterstitial, watchRewarded, submitScores, reviveRun, afterResult, countSolve,
-  IAP_REMOVE_ADS, iapAvailable, buyRemoveAds, restorePurchases, grantAdFree, renderSettings,
+  IAP_REMOVE_ADS, iapAvailable, buyRemoveAds, restorePurchases, grantAdFree, renderSettings, renderDiag,
   exportSave, mergeSave, cloudPush, cloudPull, adFreePrice,
   openObservatory, renderObservatory, obsItems, buyObs, shopOwned, msToMidnight, selectObs, renderObsCaption, allStars, allMarks, allSkies, allExtras,
   shopCatalogue, shopPick, SHOP_STAR, SHOP_MARK, SHOP_SKY, SHOP_EXTRA, SHOP_TITLE, SHOP_DECOR, noteMarkRemoved, openWardrobe, renderWardrobe, wardrobeTab, openCustomBoard, startCustom, customDust, renderCustomBoard, openModal, closeModal, toast,

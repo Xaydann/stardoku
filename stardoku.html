@@ -810,8 +810,12 @@ body { margin:0; color:var(--ink); overscroll-behavior:none; user-select:none;
   <div class="section-label" id="sec-store" style="display:none">Store</div>
   <div id="store-rows"></div>
   <div class="section-label">Progress</div>
-  <div class="set-row" id="row-cloud" style="display:none"><div><div class="set-label">iCloud sync</div><div class="set-sub">Keeps your sky on every device signed into the same Apple ID. No account needed.</div></div><div class="switch" id="sw-cloud"></div></div>
-  <div class="set-row"><div><div class="set-label">Reset everything</div><div class="set-sub">Erase all progress</div></div><button class="text-btn" id="btn-reset-progress" style="color:var(--danger)">ERASE</button></div>
+  <div class="set-row" id="row-cloud" style="display:none"><div><div class="set-label">Back up progress</div><div class="set-sub">Keeps a second copy of your sky in the app's own storage on this device, in case iOS clears web data.</div></div><div class="switch" id="sw-cloud"></div></div>
+  <div class="set-row"><div><div class="set-label">Reset everything</div><div class="set-sub" id="reset-sub">Erase all progress. A "remove ads" purchase is kept.</div></div><button class="text-btn" id="btn-reset-progress" style="color:var(--danger)">ERASE</button></div>
+  <div class="section-label">Privacy</div>
+  <div class="set-row" id="row-privacy-choices" style="display:none"><div><div class="set-label">Privacy choices</div><div class="set-sub">Change how ads may use your data</div></div><button class="text-btn" id="btn-privacy-choices">MANAGE</button></div>
+  <div class="set-row"><div><div class="set-label">Privacy policy</div><div class="set-sub">What the game and its ads collect</div></div><button class="text-btn" id="btn-privacy-policy">OPEN</button></div>
+  <div class="set-sub" id="app-version" style="text-align:center;margin-top:14px;color:var(--ink-faint)"></div>
 </div></div>
 
 <div class="backdrop" id="modal-tiers"><div class="card" style="text-align:left">
@@ -1006,6 +1010,85 @@ body { margin:0; color:var(--ink); overscroll-behavior:none; user-select:none;
 <div id="loader"><div class="loader-ring"></div><div class="loader-text" id="loader-text">CHARTING THE SKY</div></div>
 
 <script>
+/* ===================================================================
+   NATIVE BRIDGE (page side)
+   The iOS app (app/index.tsx) hosts this page in a react-native-webview.
+   This is the half that answers it: requests go out over
+   window.ReactNativeWebView.postMessage as {sd:1,id,m,a}; replies come
+   back through window.__sdReply(id,value), and the app pushes live state
+   (ad readiness, ownership, price) through window.__sdState(patch).
+   In a plain browser none of this exists and the game's built-in stub
+   (isNative:false) takes over, so the web build is unchanged.
+   =================================================================== */
+(function(){
+  var RN = window.ReactNativeWebView;
+  if(!RN && !window.__SD_NATIVE__) return;
+  var S = { owned:false, price:null, storeReady:false, interstitialReady:false,
+            rewardedReady:false, privacyOptionsRequired:false };
+  var nextId = 1, pending = {};
+  function call(m, a, timeoutMs){
+    return new Promise(function(res){
+      var id = nextId++;
+      var t = setTimeout(function(){ if(pending[id]){ delete pending[id]; res(null); } }, timeoutMs || 15000);
+      pending[id] = function(v){ clearTimeout(t); res(v); };
+      try{ (window.ReactNativeWebView || RN).postMessage(JSON.stringify({sd:1, id:id, m:m, a:a})); }
+      catch(e){ clearTimeout(t); delete pending[id]; res(null); }
+    });
+  }
+  function fire(m, a){ try{ (window.ReactNativeWebView || RN).postMessage(JSON.stringify({sd:1, id:0, m:m, a:a})); }catch(e){} }
+  window.__sdReply = function(id, v){ var f = pending[id]; if(f){ delete pending[id]; f(v); } };
+  window.__sdState = function(patch){
+    if(!patch || typeof patch !== 'object') return;
+    for(var k in patch) if(k !== 'error') S[k] = patch[k];
+    if(patch.error) try{ console.warn('[native] ' + patch.error); }catch(e){}
+    /* A purchase made or restored natively is the source of truth: mirror it
+       into the save so every ad check in the game sees it immediately. */
+    if(patch.owned === true && typeof Store !== 'undefined'){
+      try{ var p = Store.get(); if(!p.noAds){ p.noAds = true; Store.save(); } }catch(e){}
+    }
+    try{
+      var m = document.getElementById('modal-settings');
+      if(m && m.classList.contains('active') && typeof renderSettings === 'function') renderSettings();
+    }catch(e){}
+  };
+  window.SDBridge = {
+    isNative: true,
+    get appVersion(){ return S.appVersion || null; },
+    ads: {
+      ready: function(){ return !!(S.interstitialReady || S.rewardedReady); },
+      interstitialReady: function(){ return !!S.interstitialReady; },
+      rewardedReady: function(){ return !!S.rewardedReady; },
+      interstitial: function(){ return call('interstitial', null, 60000).then(function(v){ return !!v; }); },
+      rewarded: function(){ return call('rewarded', null, 120000).then(function(v){ return !!v; }); }
+    },
+    iap: {
+      available: function(){ return !!(S.storeReady && S.price); },
+      price: function(){ return S.price; },
+      buy: function(){ return call('buy', null, 300000).then(function(v){ return !!v; }); },
+      restore: function(){ return call('restore', null, 60000).then(function(v){ return !!v; }); }
+    },
+    /* Native backup of the save, on this device only (NOT iCloud). It guards
+       against the web view's storage being cleared by iOS. */
+    cloud: {
+      kind: 'device',
+      available: function(){ return true; },
+      load: function(){ return call('cloudLoad', null, 8000).then(function(s){
+        if(!s) return null; try{ return JSON.parse(s); }catch(e){ return null; } }); },
+      save: function(obj){ try{ fire('cloudSave', JSON.stringify(obj)); }catch(e){} }
+    },
+    leaderboard: { available: function(){ return false; }, submit: function(){}, show: function(){} },
+    privacy: {
+      optionsRequired: function(){ return !!S.privacyOptionsRequired; },
+      showOptions: function(){ return call('privacyOptions', null, 120000); }
+    },
+    openUrl: function(url){ fire('openUrl', url); },
+    haptic: function(kind){ fire('haptic', kind || 'light'); }
+  };
+  call('init', null, 8000);
+})();
+</script>
+
+<script id="sd-engine">
 'use strict';
 /* ===================================================================
    EXPLAINABLE DEDUCTION ENGINE  (single source of truth: the game, the
@@ -1370,6 +1453,9 @@ const SD = (function () {
   return { hashInts, hashString, generatePuzzle, logicalSolve, requiredLevel,
            levelSpec, singularitySpec, derive, countSol, regionsConnected };
 })();
+</script>
+<script>
+'use strict';
 
 /* =================================================================== */
 
@@ -2556,7 +2642,7 @@ function selectNode(k){
   if(rb) rb.addEventListener('click',()=>{ const lv=n.data.level;
     closeStarDetail(); refreshMenu(); showScreen('home');
     state.voyageLevel=lv;
-    withLoader('LOADING LEVEL '+lv,()=>beginPuzzle(getVoyagePuzzle(lv),'voyage','REPLAY \u00b7 LEVEL '+lv,{fresh:true,replay:true})); });
+    withLoader('LOADING LEVEL '+lv,()=>beginPuzzle(getVoyagePuzzle(lv),'voyage','REPLAY \u00b7 LEVEL '+lv,{fresh:true,replay:true}),['v',lv]); });
   renderStarMap();
 }
 // With stars batched into paths there is nothing to attach a listener to,
@@ -3107,14 +3193,21 @@ window.SDBridge = window.SDBridge || {
 let lastInterstitial=0, adInFlight=false;
 function adsOn(){
   const p=Store.get();
-  if(p.noAds) return false;                       // "remove ads", if you add it
+  if(p.noAds) return false;                       // bought "remove ads"
   return !!(window.SDBridge&&window.SDBridge.isNative&&window.SDBridge.ads.ready());
+}
+/* Per-format readiness. The old single ready() let the game offer a rewarded
+   revive when only an interstitial had loaded, and the revive then failed. */
+function adReady(kind){
+  const B=window.SDBridge; if(!B||!B.isNative||Store.get().noAds) return false;
+  const f=B.ads[kind+'Ready'];
+  return typeof f==='function' ? !!f() : !!B.ads.ready();
 }
 /* Interstitials fire only between puzzles, never inside one. The result card
    has already been dismissed by the time this runs, so the ad never lands on
    top of a board the player is still reading. */
 async function maybeInterstitial(){
-  if(!adsOn()||!ADS.interstitialEvery||adInFlight) return false;
+  if(!adReady('interstitial')||!ADS.interstitialEvery||adInFlight) return false;
   const p=Store.get();
   if((p.solveCount||0) < ADS.graceSolves) return false;
   if(p.adCounter===undefined) p.adCounter=0;
@@ -3139,7 +3232,7 @@ async function afterResult(go){
 // Solve counting is separate from ad counting, so the grace period is honest.
 function countSolve(){ const p=Store.get(); p.solveCount=(p.solveCount||0)+1; Store.save(); }
 async function watchRewarded(){
-  if(!adsOn()) return false;
+  if(!adReady('rewarded')) return false;
   try{ return !!(await window.SDBridge.ads.rewarded()); }catch(e){ return false; }
 }
 function submitScores(){
@@ -3157,7 +3250,13 @@ function submitScores(){
 /* ================= REMOVE ADS =================
    A single non-consumable. Apple requires a visible Restore control for these,
    and rejects builds without one, so both live in Settings together. */
-const IAP_REMOVE_ADS='stardoku.removead';
+/* Informational only. The product the app actually sells is set ONCE, in
+   src/config.ts of the native app; the page never sends its own ID. Two
+   different IDs on the two sides is what made purchases silently fail. */
+const IAP_REMOVE_ADS='stardoku.adremove';
+/* Public URL of the privacy policy (privacy-policy.html in this project,
+   hosted anywhere public). Must match the URL given in App Store Connect. */
+const PRIVACY_URL='https://xaydann.github.io/stardoku/privacy-policy.html';
 /* 'consumable' or 'nonconsumable'. Set this to whatever the product actually
    is in App Store Connect, because it changes what the UI may promise.
    A consumable cannot be restored, so offering a Restore button for one would
@@ -3278,6 +3377,24 @@ function renderSettings(){
     cloudRow.style.display='';
     document.getElementById('sw-cloud').classList.toggle('on',p.cloudSync!==false);
   } else cloudRow.style.display='none';
+
+  const pc=document.getElementById('row-privacy-choices');
+  if(pc) pc.style.display=(B&&B.privacy&&B.privacy.optionsRequired())?'':'none';
+  const rb=document.getElementById('btn-reset-progress');
+  if(rb){ rb.textContent='ERASE'; rb.dataset.armed=''; }
+  const vs=document.getElementById('app-version');
+  if(vs) vs.textContent=(B&&B.appVersion)?('Stardoku '+B.appVersion):'';
+}
+function openPrivacyPolicy(){
+  const B=window.SDBridge;
+  if(B&&B.isNative&&typeof B.openUrl==='function') B.openUrl(PRIVACY_URL);
+  else window.open(PRIVACY_URL,'_blank','noopener');
+}
+async function openPrivacyChoices(){
+  const B=window.SDBridge;
+  if(!B||!B.privacy) return;
+  try{ await B.privacy.showOptions(); }catch(e){}
+  renderSettings();
 }
 
 /* ================= dates ================= */
@@ -3291,13 +3408,80 @@ function dailyNumber(){ return dayNumberOf(todayStr()); }
 function zodiacOfKey(k){ const d=keyToDate(k); return zodiacFor(d.getMonth()+1,d.getDate()); }
 
 /* ================= puzzle sourcing ================= */
-function getVoyagePuzzle(l){ return BANK.voyage[l] || SD.derive(SD.hashInts(0x5747,l), SD.levelSpec(l)); }
-function getSingularityPuzzle(r){ return SD.derive(SD.hashInts(0x9E37,r), SD.singularitySpec(r)); }
-function getDailyPuzzleFor(k){ return SD.derive(SD.hashString('STARDOKU-DAILY-'+k), {N:9,budget:2600,minTech:4,maxTech:5,cap:24}); }
+/* ================= puzzle generation =================
+   Every puzzle is a pure function of its key, so results are cached. Levels
+   past the baked bank, the Daily and Singularity rounds take 0.5-3s each on a
+   desktop and several times that on a phone. That work runs in a Web Worker
+   built from the engine's own <script id="sd-engine"> source, so the loader
+   keeps spinning and iOS never sees a frozen page. If a Worker cannot be made
+   the old synchronous path is used, so nothing can fail outright.          */
+const PUZ_CACHE=new Map();
+const PUZ_SPEC={
+  v:l=>[SD.hashInts(0x5747,l), SD.levelSpec(l)],
+  s:r=>[SD.hashInts(0x9E37,r), SD.singularitySpec(r)],
+  d:k=>[SD.hashString('STARDOKU-DAILY-'+k), {N:9,budget:2600,minTech:4,maxTech:5,cap:24}]
+};
+function puzKey(kind,arg){ return kind+':'+arg; }
+function puzSync(kind,arg){
+  if(kind==='v'&&BANK.voyage[arg]) return BANK.voyage[arg];
+  const k=puzKey(kind,arg); if(PUZ_CACHE.has(k)) return PUZ_CACHE.get(k);
+  const a=PUZ_SPEC[kind](arg); const p=SD.derive(a[0],a[1]);
+  if(p) PUZ_CACHE.set(k,p); return p;
+}
+const PuzWorker=(function(){
+  let w=null, broken=false, seq=0; const waiting=new Map(), inflight=new Map();
+  function make(){
+    if(w||broken) return w;
+    try{
+      const src=document.getElementById('sd-engine').textContent+
+        '\nself.onmessage=function(e){var d=e.data,p=null;try{p=SD.derive(d.seed,d.spec);}catch(x){}self.postMessage({id:d.id,p:p});};';
+      w=new Worker(URL.createObjectURL(new Blob([src],{type:'text/javascript'})));
+      w.onmessage=e=>{ const f=waiting.get(e.data.id); if(f){ waiting.delete(e.data.id); f(e.data.p); } };
+      w.onerror=()=>{ broken=true; try{w.terminate();}catch(x){} w=null;
+        waiting.forEach(f=>f(undefined)); waiting.clear(); };
+    }catch(e){ broken=true; w=null; }
+    return w;
+  }
+  function get(kind,arg){
+    if(kind==='v'&&BANK.voyage[arg]) return Promise.resolve(BANK.voyage[arg]);
+    const k=puzKey(kind,arg);
+    if(PUZ_CACHE.has(k)) return Promise.resolve(PUZ_CACHE.get(k));
+    if(inflight.has(k)) return inflight.get(k);
+    const wk=make();
+    const pr=new Promise(res=>{
+      if(!wk){ res(undefined); return; }
+      const id=++seq, a=PUZ_SPEC[kind](arg);
+      waiting.set(id,res); wk.postMessage({id:id,seed:a[0],spec:a[1]});
+    }).then(p=>{
+      inflight.delete(k);
+      if(p===undefined) return puzSync(kind,arg);   // no worker: old path
+      if(p) PUZ_CACHE.set(k,p);
+      return p;
+    });
+    inflight.set(k,pr); return pr;
+  }
+  return { get, prefetch:(kind,arg)=>{ get(kind,arg).catch(()=>{}); } };
+})();
+function getVoyagePuzzle(l){ return puzSync('v',l); }
+function getSingularityPuzzle(r){ return puzSync('s',r); }
+function getDailyPuzzleFor(k){ return puzSync('d',k); }
 function getDailyPuzzle(){ return getDailyPuzzleFor(todayStr()); }
-function withLoader(text,work){ const el=document.getElementById('loader');
+/* Warm the cache for whatever the player is most likely to open next. */
+function prefetchLikely(){
+  try{
+    const p=Store.get();
+    PuzWorker.prefetch('d',todayStr());
+    PuzWorker.prefetch('v',p.voyageLevel||1); PuzWorker.prefetch('v',(p.voyageLevel||1)+1);
+    PuzWorker.prefetch('s',Math.max(1,p.singularityRound||1));
+  }catch(e){}
+}
+/* `needs` is an optional [kind,arg]: the puzzle is generated off-thread
+   first, and `work` then finds it in the cache. */
+function withLoader(text,work,needs){ const el=document.getElementById('loader');
   document.getElementById('loader-text').textContent=text; el.classList.add('active');
-  setTimeout(()=>{ try{ work(); } finally { el.classList.remove('active'); } },32); }
+  const run=()=>{ try{ work(); } finally { el.classList.remove('active'); } };
+  if(needs) PuzWorker.get(needs[0],needs[1]).then(()=>setTimeout(run,0),()=>setTimeout(run,0));
+  else setTimeout(run,32); }
 
 /* ================= run persistence (no heart resets by backing out) ================= */
 function runKey(){
@@ -3352,7 +3536,7 @@ function beginPuzzle(p,mode,label,opts){
 }
 function startVoyage(){ const p=Store.get(); state.voyageLevel=p.voyageLevel;
   const tut = state.voyageLevel===1?'rules': state.voyageLevel===2?'controls':null;
-  withLoader('CHARTING THE SKY',()=>beginPuzzle(getVoyagePuzzle(state.voyageLevel),'voyage','VOYAGE '+state.voyageLevel,{tutorial:tut})); }
+  withLoader('CHARTING THE SKY',()=>beginPuzzle(getVoyagePuzzle(state.voyageLevel),'voyage','VOYAGE '+state.voyageLevel,{tutorial:tut}),['v',state.voyageLevel]); }
 function startSingularity(){
   const p=Store.get();
   if((p.singularityRound||1)<=1) p.singularityRevived=false;   // a clean run starts clean
@@ -3360,12 +3544,12 @@ function startSingularity(){
   state.singularityRound=Math.max(1,p.singularityRound||1);
   const r=state.singularityRound;
   withLoader(r>1?'RESUMING':'COLLAPSING',
-    ()=>beginPuzzle(getSingularityPuzzle(r),'singularity','SINGULARITY \u00b7 ROUND '+r)); }
+    ()=>beginPuzzle(getSingularityPuzzle(r),'singularity','SINGULARITY \u00b7 ROUND '+r),['s',r]); }
 function startDaily(){ state.dailyDate=todayStr();
   const log=Store.get().dailyLog[state.dailyDate];
   if(log==='win'){ toast('Today\u2019s star is already yours.'); openCalendar(); return; }
   closeModal('modal-calendar');
-  withLoader('READING TODAY\u2019S SKY',()=>beginPuzzle(getDailyPuzzle(),'daily','DAILY #'+dailyNumber())); }
+  withLoader('READING TODAY\u2019S SKY',()=>beginPuzzle(getDailyPuzzle(),'daily','DAILY #'+dailyNumber()),['d',state.dailyDate]); }
 function startFree(tier){ state.freeTier=tier; const list=BANK.free[tier];
   const p=list[Math.floor(Math.random()*list.length)];
   closeModal('modal-tiers');
@@ -4084,10 +4268,12 @@ function checkWin(){ if(state.review)return; let n=0; for(const s of state.cellS
   }
   state.lastDust=awardDust();
   if(state.mode==='voyage'&&!state.replay&&state.voyageLevel>=p.voyageLevel) p.voyageLevel=state.voyageLevel+1;
-  if(state.mode==='daily'&&!state.replay){ const t=todayStr();
+  if(state.mode==='daily'&&!state.replay){ const t=state.dailyDate||todayStr();
     if(p.dailyLog[t]!=='win'){
       p.dailyLog[t]='win';
-      const y=dateKey(new Date(keyToDate(t).getTime()-86400000));
+      // Calendar arithmetic, not "minus 24h": on the spring DST day local
+      // midnight minus 24h lands two days back and silently broke streaks.
+      const td=keyToDate(t), y=dateKey(new Date(td.getFullYear(),td.getMonth(),td.getDate()-1));
       p.dailyStreak=(p.dailyLog[y]==='win')?p.dailyStreak+1:1;
       const z=zodiacOfKey(t); if(!p.zodiac)p.zodiac={}; p.zodiac[z.id]=true; } }
   if(state.mode==='singularity'){
@@ -4110,14 +4296,22 @@ function checkWin(){ if(state.review)return; let n=0; for(const s of state.cellS
   Store.save(); clearRun(); renderProgressStrip();
   submitScores();
   if(state.mode!=='training') countSolve();
+  // The finale animation takes a few seconds: build the next board meanwhile.
+  if(state.mode==='voyage') PuzWorker.prefetch('v',state.voyageLevel+1);
+  else if(state.mode==='singularity') PuzWorker.prefetch('s',state.singularityRound+1);
   playFinale(()=>{ showResult(false); announceUnlocks(state.newAchievements); }); }
 function lose(){ state.failed=true; stopTimer(); sfxFail(); closeHint(); closeTutorial();
-  if(state.mode==='daily'&&!state.replay){ const p=Store.get();
-    if(!p.dailyLog[todayStr()]) p.dailyLog[todayStr()]='loss';
+  // Log against the day being played, not the clock: a Daily started before
+  // midnight and lost after it belongs to the day it was started.
+  if(state.mode==='daily'&&!state.replay){ const p=Store.get(), dk=state.dailyDate||todayStr();
+    if(!p.dailyLog[dk]) p.dailyLog[dk]='loss';
     p.dailyStreak=0; Store.save(); }
   saveRun(); syncButtons();
   // The run is only wiped once a revive has been declined or is unavailable.
-  const canRevive = (state.mode==='singularity') && ADS.reviveSingularity && adsOn() && !state.revivedThisRound;
+  // Players who bought "remove ads" revive without an ad, rather than losing
+  // the feature they would otherwise have had for free.
+  const canRevive = (state.mode==='singularity') && ADS.reviveSingularity && !state.revivedThisRound
+                    && (Store.get().noAds || adReady('rewarded'));
   if(state.mode==='singularity'&&!canRevive){ const pr=Store.get(); pr.singularityRound=1; clearRun(); Store.save(); }
   state.offerRevive=canRevive;
   if(state.noMarks) playCollapse(state.lastWrong,()=>showResult(true));
@@ -4128,17 +4322,21 @@ function lose(){ state.failed=true; stopTimer(); sfxFail(); closeHint(); closeTu
    rarest title in the game would be buyable with attention, and every honest
    hundred-round run would be worth less. */
 async function reviveRun(){
-  const ok=await watchRewarded();
-  if(!ok){ toast('No ad was available. The run ends here.');
+  const btn=document.getElementById('r-revive'); if(btn){ btn.disabled=true; }
+  const ok=Store.get().noAds ? true : await watchRewarded();
+  if(!ok){
+    // Not the player's fault: no fill, or they closed the ad early. Take the
+    // revive off the table and leave the normal end-of-run choices in place.
+    toast('No reward this time. The run ends here.');
     const pr=Store.get(); pr.singularityRound=1; clearRun(); Store.save();
-    closeModal('modal-result'); refreshMenu(); showScreen('home'); return; }
+    state.offerRevive=false; showResult(true); return; }
   const p=Store.get();
   p.singularityRevived=true; Store.save();
   state.revivedThisRound=true;
   closeModal('modal-result');
   toast('Revived. This run no longer counts towards The Singularity.');
   withLoader('REBUILDING',()=>beginPuzzle(getSingularityPuzzle(state.singularityRound),
-    'singularity','SINGULARITY \u00b7 ROUND '+state.singularityRound,{fresh:true}));
+    'singularity','SINGULARITY \u00b7 ROUND '+state.singularityRound,{fresh:true}),['s',state.singularityRound]);
 }
 
 function showResult(failed){
@@ -4148,23 +4346,25 @@ function showResult(failed){
   const justDone=(!failed&&stars>0&&inC===0&&state.mode!=='training');
   let html='';
   if(failed){
-    html+=`<div class="card-eyebrow">${state.mode==='singularity'?'SINGULARITY':state.mode==='daily'?'DAILY #'+dailyNumber():'ATTEMPT ENDED'}</div>
+    html+=`<div class="card-eyebrow">${state.mode==='singularity'?'SINGULARITY':state.mode==='daily'?'DAILY #'+dayNumberOf(state.dailyDate||todayStr()):'ATTEMPT ENDED'}</div>
            <div class="card-title fail">OUT OF HEARTS</div>`;
     if(state.mode==='singularity') html+=`<div class="big-time">${state.singularityRound-1}</div><div class="par-line">rounds survived \u00b7 best <b>${p.singularityBest||0}</b></div>`;
     else html+=`<div class="big-time">${fmt(t)}</div>`;
     if(state.mode==='daily'){
-      html+=`<div class="par-line" style="margin-top:10px">Today\u2019s star got away. It is logged on your calendar.</div>`;
+      html+= state.replay
+        ? `<div class="par-line" style="margin-top:10px">Practice run. Your calendar is unchanged.</div>`
+        : `<div class="par-line" style="margin-top:10px">Today\u2019s star got away. It is logged on your calendar.</div>`;
       html+=`<button class="btn btn-primary" id="r-explain">WALK ME THROUGH IT</button>
              <button class="btn btn-ghost" id="r-cal">SHOW RESULT</button>`;
     } else {
       if(state.offerRevive)
-        html+=`<button class="btn btn-primary" id="r-revive">WATCH AN AD TO CONTINUE</button>
+        html+=`<button class="btn btn-primary" id="r-revive">${p.noAds?'CONTINUE THIS RUN':'WATCH AN AD TO CONTINUE'}</button>
                <div class="par-note" style="margin-top:6px">A revived run cannot earn The Singularity.</div>`;
       html+=`<button class="btn btn-${state.offerRevive?'ghost':'primary'}" id="r-again">TRY AGAIN</button>
              <button class="btn btn-ghost" id="r-home">RETURN</button>`; }
   } else {
     const par=parSeconds(state.N,state.tech), pct=estPercentile(t,par);
-    html+=`<div class="card-eyebrow">${state.mode==='daily'?'DAILY #'+dailyNumber():
+    html+=`<div class="card-eyebrow">${state.mode==='daily'?'DAILY #'+dayNumberOf(state.dailyDate||todayStr()):
       state.mode==='voyage'?'VOYAGE '+state.voyageLevel:
       state.mode==='singularity'?'ROUND '+state.singularityRound:
       state.mode==='training'?'TRAINING':state.mode==='custom'?'CUSTOM BOARD':state.mode==='freesing'?'SINGULARITY BOARD':state.freeTier.toUpperCase()}</div>`;
@@ -4217,22 +4417,22 @@ function showResult(failed){
   bind('r-revive',reviveRun);
   bind('r-again',()=>afterResult(()=>{
     if(state.mode==='singularity') startSingularity();
-    else if(state.mode==='voyage'){ clearRun(); withLoader('CHARTING THE SKY',()=>beginPuzzle(getVoyagePuzzle(state.voyageLevel),'voyage','VOYAGE '+state.voyageLevel,{fresh:true})); }
+    else if(state.mode==='voyage'){ clearRun(); withLoader('CHARTING THE SKY',()=>beginPuzzle(getVoyagePuzzle(state.voyageLevel),'voyage','VOYAGE '+state.voyageLevel,{fresh:true}),['v',state.voyageLevel]); }
     else if(state.mode==='training') startTraining(state.trainTech);
     else startFree(state.freeTier); }));
   bind('r-next',()=>afterResult(()=>{
     if(state.mode==='voyage'){ state.voyageLevel++;
       const pr=Store.get(); pr.voyageLevel=Math.max(pr.voyageLevel,state.voyageLevel); Store.save();
       const tut=state.voyageLevel===2?'controls':null;
-      withLoader('CHARTING THE SKY',()=>beginPuzzle(getVoyagePuzzle(state.voyageLevel),'voyage','VOYAGE '+state.voyageLevel,{tutorial:tut})); }
+      withLoader('CHARTING THE SKY',()=>beginPuzzle(getVoyagePuzzle(state.voyageLevel),'voyage','VOYAGE '+state.voyageLevel,{tutorial:tut}),['v',state.voyageLevel]); }
     else if(state.mode==='singularity'){ state.singularityRound++;
-      withLoader('DEEPER',()=>beginPuzzle(getSingularityPuzzle(state.singularityRound),'singularity','SINGULARITY \u00b7 ROUND '+state.singularityRound,{fresh:true})); }
+      withLoader('DEEPER',()=>beginPuzzle(getSingularityPuzzle(state.singularityRound),'singularity','SINGULARITY \u00b7 ROUND '+state.singularityRound,{fresh:true}),['s',state.singularityRound]); }
     else if(state.mode==='training'){ const nx=state.trainTech<5?state.trainTech+1:1; startTraining(nx); }
     else startFree(state.freeTier); }));
   bind('r-retry',()=>{ closeModal('modal-result'); startTraining(state.trainTech); });
   bind('r-dreplay',()=>{ closeModal('modal-result'); const k=state.dailyDate||todayStr();
     toast('Practice run. Your result will not change.');
-    withLoader('READING THAT DAY\u2019S SKY',()=>beginPuzzle(getDailyPuzzleFor(k),'daily','DAILY \u00b7 PRACTICE',{fresh:true,replay:true})); });
+    withLoader('READING THAT DAY\u2019S SKY',()=>beginPuzzle(getDailyPuzzleFor(k),'daily','DAILY \u00b7 PRACTICE',{fresh:true,replay:true}),['d',k]); });
   bind('r-custom',()=>afterResult(()=>{ refreshMenu(); showScreen('home'); openCustomBoard(); }));
   bind('r-learn',()=>afterResult(()=>{ refreshMenu(); showScreen('home'); openLessons(); }));
   document.getElementById('modal-result').classList.add('active'); }
@@ -4265,7 +4465,7 @@ function renderCalendar(){
     toast('Practice run. Your result for that day will not change.');
     withLoader('READING THAT DAY\u2019S SKY',()=>{
       state.dailyDate=k;
-      beginPuzzle(getDailyPuzzleFor(k),'daily','DAILY #'+dayNumberOf(k)+' \u00b7 PRACTICE',{fresh:true,replay:true}); }); }));
+      beginPuzzle(getDailyPuzzleFor(k),'daily','DAILY #'+dayNumberOf(k)+' \u00b7 PRACTICE',{fresh:true,replay:true}); },['d',k]); }));
   const done=log[today]==='win';
   const btn=document.getElementById('cal-play');
   btn.textContent=done?'ALREADY SOLVED TODAY':(log[today]==='loss'?'TRY AGAIN TOMORROW':'PLAY TODAY');
@@ -4916,17 +5116,42 @@ function init(){
   toggle('sw-haptic',p=>{ p.haptics=(p.haptics===false); if(p.haptics) haptic('medium'); });
   toggle('sw-motion',p=>{ p.reduceMotion=!p.reduceMotion; });
   toggle('sw-skydir',p=>{ p.skyDir=(p.skyDir===-1)?1:-1; turnSky(); });
-  toggle('sw-cloud',p=>{ p.cloudSync=(p.cloudSync===false); if(p.cloudSync) cloudPush(); });
+  toggle('sw-cloud',p=>{ p.cloudSync=(p.cloudSync===false); if(p.cloudSync) cloudPush(); renderSettings(); });
   applyPrefs();
-  $('btn-reset-progress').addEventListener('click',()=>{ Store.wipe(); state.voyageLevel=1;
+  $('btn-privacy-policy').addEventListener('click',openPrivacyPolicy);
+  $('btn-privacy-choices').addEventListener('click',openPrivacyChoices);
+  /* Erase used to fire on one tap. Now the first tap arms it, the second
+     (within 4s) erases. The purchase survives: it was paid for. */
+  let resetTimer=null;
+  $('btn-reset-progress').addEventListener('click',()=>{
+    const b=$('btn-reset-progress');
+    if(b.dataset.armed!=='1'){ b.dataset.armed='1'; b.textContent='TAP AGAIN';
+      clearTimeout(resetTimer); resetTimer=setTimeout(()=>{ b.dataset.armed=''; b.textContent='ERASE'; },4000); return; }
+    clearTimeout(resetTimer); b.dataset.armed=''; b.textContent='ERASE';
+    const keepNoAds=!!Store.get().noAds;
+    Store.wipe(); state.voyageLevel=1;
+    if(keepNoAds){ Store.get().noAds=true; Store.save(); }
+    // Overwrite the native backup now, or the next launch merges the old
+    // progress straight back in.
+    try{ const B=window.SDBridge; if(B&&B.cloud.available()) B.cloud.save(exportSave()); }catch(e){}
+    PUZ_CACHE.clear();
     refreshMenu(); renderStarMap(); closeModal('modal-settings'); toast('Progress erased.'); });
   $('coach-next').addEventListener('click',coachNext);
   $('les-close').addEventListener('click',closeLesson);
-  window.addEventListener('beforeunload',saveRun);
+  /* iOS rarely fires beforeunload: an app is backgrounded, then killed. Save
+     on every way out, and flush the native backup without the usual delay. */
+  const flush=()=>{ try{ saveRun(); }catch(e){}
+    try{ const B=window.SDBridge; if(B&&B.cloud.available()&&Store.get().cloudSync!==false){
+      clearTimeout(cloudTimer); B.cloud.save(exportSave()); } }catch(e){} };
+  window.addEventListener('beforeunload',flush);
+  window.addEventListener('pagehide',flush);
+  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden') flush(); });
   showScreen('home');
   // if a cloud save exists, merge it in before the first frame is meaningful
-  cloudPull().then(pulled=>{ if(pulled){ refreshMenu(); renderProgressStrip(); } });
+  cloudPull().then(pulled=>{ if(pulled){ state.voyageLevel=Store.get().voyageLevel; refreshMenu(); renderProgressStrip(); } });
   runSplash();
+  // Build the puzzles the player is most likely to open next, off-thread.
+  setTimeout(prefetchLikely,2500);
 }
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
 

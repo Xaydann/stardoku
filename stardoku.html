@@ -3,6 +3,36 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<script>
+/* iPad / large screens. The whole game is designed for a phone-sized
+   column, which on a 13" iPad left a thin strip in a sea of empty screen.
+   On large screens, lay the page out at a phone-like size and let WebKit
+   scale it up to fill the display. Touches, popups and the star map all
+   scale with it, because this is the browser's own zoom, not a CSS trick.
+   Phones (shorter side under 700pt) are left exactly as they were. */
+(function(){
+  var TARGET_H = 860;     // CSS height the layout was designed around
+  var MIN_W = 560;        // never narrower than the content column + margins
+  function set(m, c){ if(m.getAttribute('content') !== c) m.setAttribute('content', c); }
+  function fit(){
+    var m = document.querySelector('meta[name="viewport"]'); if(!m) return;
+    var sw = screen.width, sh = screen.height;
+    if(Math.min(sw, sh) < 700){
+      set(m, 'width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover');
+      return;
+    }
+    var land = (window.matchMedia && matchMedia('(orientation: landscape)').matches);
+    var W = land ? Math.max(sw, sh) : Math.min(sw, sh);
+    var H = land ? Math.min(sw, sh) : Math.max(sw, sh);
+    var w = Math.max(MIN_W, Math.round(TARGET_H * W / H));
+    var s = (W / w).toFixed(4);
+    set(m, 'width=' + w + ', initial-scale=' + s + ', minimum-scale=' + s + ', maximum-scale=' + s + ', user-scalable=no, viewport-fit=cover');
+  }
+  fit();
+  window.addEventListener('orientationchange', function(){ setTimeout(fit, 60); });
+  window.addEventListener('resize', function(){ clearTimeout(fit._t); fit._t = setTimeout(fit, 120); });
+})();
+</script>
 <title>STARDOKU</title>
 <style>
 :root {

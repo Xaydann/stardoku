@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Stardoku iPad test</title>
+<style>
+body{margin:0;background:#070911;color:#EAEDF7;font:18px/1.5 -apple-system,system-ui,sans-serif}
+main{max-width:620px;margin:0 auto;padding:40px 24px}
+h1{font-family:Georgia,serif;font-size:30px;margin:0 0 6px}
+p{color:#B9C1DA}
+a{display:block;margin:14px 0;padding:16px 18px;border-radius:14px;background:#161B2C;border:1px solid rgba(232,198,106,.35);color:#E8C66A;text-decoration:none;font-weight:600}
+a small{display:block;color:#9AA3C0;font-weight:400;margin-top:4px}
+</style></head><body>
+<script>
+/* Stardoku iPad test harness.
+   Loads the real game page and applies one scaling method + optional
+   performance switches, with an FPS / size readout. Nothing here ships. */
+(function(){
+  var q = new URLSearchParams(location.search);
+  var mode = q.get('mode');
+  if(!mode){
+    var L = [
+      ['none',       0, 'A. No scaling (baseline)', 'How the live app looks on iPad today'],
+      ['none',       1, 'B. No scaling + Lite',     'Baseline with blurs and sky animation off'],
+      ['transform',  0, 'C. Transform scaling',     'Whole page laid out phone-size, scaled up'],
+      ['transform',  1, 'D. Transform + Lite',      'C with blurs and sky animation off'],
+      ['zoom',       0, 'E. CSS zoom scaling',      'Alternative scaling method'],
+      ['zoom',       1, 'F. CSS zoom + Lite',       'E with blurs and sky animation off']
+    ];
+    var h = '<main><h1>Stardoku iPad test</h1><p>Open each one, play a few moves, rotate the iPad, and note the <b>FPS</b> number in the top corner and whether the game <b>fills the screen</b>. Use the Back button to return here.</p>';
+    L.forEach(function(x){ h += '<a href="?mode='+x[0]+(x[1]?'&lite=1':'')+'">'+x[2]+'<small>'+x[3]+'</small></a>'; });
+    document.body.innerHTML = h + '</main>';
+    return;
+  }
+  var lite = q.get('lite') === '1';
+  var patch = '<script>(' + (function(MODE, LITE){
+    var S = 1, LW = 0, LH = 0;
+    var realW = function(){ return document.documentElement.clientWidth || window.innerWidth; };
+    var realH = function(){ return window.innerHeight; };
+    var _iw = Object.getOwnPropertyDescriptor(window, 'innerWidth') || Object.getOwnPropertyDescriptor(Window.prototype, 'innerWidth');
+    var _ih = Object.getOwnPropertyDescriptor(window, 'innerHeight') || Object.getOwnPropertyDescriptor(Window.prototype, 'innerHeight');
+    var W0 = function(){ return _iw && _iw.get ? _iw.get.call(window) : 1024; };
+    var H0 = function(){ return _ih && _ih.get ? _ih.get.call(window) : 768; };
+    var style = document.createElement('style'); document.head.appendChild(style);
+    function compute(){
+      var W = W0(), H = H0();
+      S = (Math.min(W, H) >= 600) ? Math.max(1, Math.min(H / 860, W / 560)) : 1;
+      LW = W / S; LH = H / S;
+      var css = '';
+      if(MODE === 'transform' && S > 1){
+        css += 'html{overflow:hidden;height:' + H + 'px}' +
+               'body{width:' + LW + 'px!important;height:' + LH + 'px!important;overflow:hidden;transform:scale(' + S + ');transform-origin:0 0;position:relative}' +
+               '#app{height:' + LH + 'px!important;max-height:none!important}';
+      }
+      if(MODE === 'zoom' && S > 1){
+        css += 'html{zoom:' + S + '}' +
+               '#app{height:' + LH + 'px!important}';
+      }
+      if(LITE){
+        css += '*{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}' +
+               '.sky-star{animation:none!important}' +
+               'body{background-attachment:scroll!important}';
+      }
+      style.textContent = css;
+    }
+    if(MODE === 'transform'){
+      try{
+        Object.defineProperty(window, 'innerWidth',  { configurable: true, get: function(){ return S > 1 ? LW : W0(); } });
+        Object.defineProperty(window, 'innerHeight', { configurable: true, get: function(){ return S > 1 ? LH : H0(); } });
+      }catch(e){}
+    }
+    compute();
+    window.addEventListener('resize', function(){ clearTimeout(compute.t); compute.t = setTimeout(compute, 100); });
+    window.addEventListener('orientationchange', function(){ setTimeout(compute, 150); });
+    document.addEventListener('DOMContentLoaded', function(){
+      var hud = document.createElement('div');
+      hud.style.cssText = 'position:fixed;right:6px;top:6px;z-index:99999;background:rgba(0,0,0,.72);color:#7CFC9A;font:12px/1.35 ui-monospace,Menlo,monospace;padding:6px 8px;border-radius:8px;pointer-events:none;white-space:pre';
+      document.body.appendChild(hud);
+      var frames = 0, last = performance.now(), worst = 0, prev = last;
+      (function tick(t){
+        frames++; worst = Math.max(worst, t - prev); prev = t;
+        if(t - last >= 1000){
+          hud.textContent = 'FPS ' + Math.round(frames * 1000 / (t - last)) + '  worst ' + Math.round(worst) + 'ms\n' +
+            MODE + (LITE ? '+lite' : '') + '  scale ' + S.toFixed(2) + '\n' +
+            'view ' + Math.round(W0()) + 'x' + Math.round(H0()) + '  layout ' + Math.round(LW) + 'x' + Math.round(LH) + '\n' +
+            'dpr ' + window.devicePixelRatio + '  vv ' + (window.visualViewport ? visualViewport.scale.toFixed(2) : '-');
+          frames = 0; worst = 0; last = t;
+        }
+        requestAnimationFrame(tick);
+      })(performance.now());
+    });
+  }).toString() + ')(' + JSON.stringify(mode) + ',' + JSON.stringify(lite) + ');</' + 'script>';
+  fetch((q.get('src') || 'stardoku.html') + '?t=' + Date.now()).then(function(r){ return r.text(); }).then(function(t){
+    // Strip the old page-side iPad viewport script if this copy still has it.
+    t = t.replace(/<script>\s*\/\* iPad \/ large screens\.[\s\S]*?<\/script>\s*/, '');
+    t = t.replace('<head>', '<head>' + patch);
+    document.open(); document.write(t); document.close();
+  }).catch(function(e){ document.body.textContent = 'Could not load the game: ' + e; });
+})();
+</script>
+</body></html>

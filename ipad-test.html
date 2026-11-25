@@ -9,88 +9,112 @@ h1{font-family:Georgia,serif;font-size:30px;margin:0 0 6px}
 p{color:#B9C1DA}
 a{display:block;margin:14px 0;padding:16px 18px;border-radius:14px;background:#161B2C;border:1px solid rgba(232,198,106,.35);color:#E8C66A;text-decoration:none;font-weight:600}
 a small{display:block;color:#9AA3C0;font-weight:400;margin-top:4px}
+a.big{background:#E8C66A;color:#0A0C15}
+a.big small{color:#3a3320}
 </style></head><body>
 <script>
-/* Stardoku iPad test harness.
-   Loads the real game page and applies one scaling method + optional
-   performance switches, with an FPS / size readout. Nothing here ships. */
+/* Stardoku iPad test harness: loads the real game page and applies scaling
+   methods and effect switches, with an FPS readout or an automatic benchmark.
+   Nothing here ships. */
 (function(){
   var q = new URLSearchParams(location.search);
   var mode = q.get('mode');
   if(!mode){
     var L = [
+      ['bench',      0, 'RUN THE BENCHMARK', 'Automatic: tests 7 settings for ~4 s each, then shows a results table. Keep the iPad still and do not touch it.', 'big'],
       ['none',       0, 'A. No scaling (baseline)', 'How the live app looks on iPad today'],
-      ['none',       1, 'B. No scaling + Lite',     'Baseline with blurs and sky animation off'],
       ['transform',  0, 'C. Transform scaling',     'Whole page laid out phone-size, scaled up'],
-      ['transform',  1, 'D. Transform + Lite',      'C with blurs and sky animation off'],
-      ['zoom',       0, 'E. CSS zoom scaling',      'Alternative scaling method'],
-      ['zoom',       1, 'F. CSS zoom + Lite',       'E with blurs and sky animation off']
+      ['transform',  1, 'D. Transform + Lite',      'C with blurs, animations and glows off']
     ];
-    var h = '<main><h1>Stardoku iPad test</h1><p>Open each one, play a few moves, rotate the iPad, and note the <b>FPS</b> number in the top corner and whether the game <b>fills the screen</b>. Use the Back button to return here.</p>';
-    L.forEach(function(x){ h += '<a href="?mode='+x[0]+(x[1]?'&lite=1':'')+'">'+x[2]+'<small>'+x[3]+'</small></a>'; });
+    var h = '<main><h1>Stardoku iPad test</h1><p>Please run the benchmark once with the iPad <b>upright</b> and once <b>sideways</b> (start it in that orientation), and send a screenshot or the numbers from each results table.</p>';
+    L.forEach(function(x){ h += '<a class="'+(x[4]||'')+'" href="?mode='+x[0]+(x[1]?'&lite=1':'')+'">'+x[2]+'<small>'+x[3]+'</small></a>'; });
     document.body.innerHTML = h + '</main>';
     return;
   }
   var lite = q.get('lite') === '1';
   var patch = '<script>(' + (function(MODE, LITE){
-    var S = 1, LW = 0, LH = 0;
-    var realW = function(){ return document.documentElement.clientWidth || window.innerWidth; };
-    var realH = function(){ return window.innerHeight; };
     var _iw = Object.getOwnPropertyDescriptor(window, 'innerWidth') || Object.getOwnPropertyDescriptor(Window.prototype, 'innerWidth');
     var _ih = Object.getOwnPropertyDescriptor(window, 'innerHeight') || Object.getOwnPropertyDescriptor(Window.prototype, 'innerHeight');
     var W0 = function(){ return _iw && _iw.get ? _iw.get.call(window) : 1024; };
     var H0 = function(){ return _ih && _ih.get ? _ih.get.call(window) : 768; };
+    var cfg = { scale: MODE === 'transform', blur: !LITE, sky: !LITE, anim: !LITE, glow: !LITE, fixedbg: !LITE };
+    var S = 1, LW = 0, LH = 0;
     var style = document.createElement('style'); document.head.appendChild(style);
-    function compute(){
+    function apply(){
       var W = W0(), H = H0();
-      S = (Math.min(W, H) >= 600) ? Math.max(1, Math.min(H / 860, W / 560)) : 1;
+      S = (cfg.scale && Math.min(W, H) >= 600) ? Math.max(1, Math.min(H / 860, W / 560)) : 1;
       LW = W / S; LH = H / S;
       var css = '';
-      if(MODE === 'transform' && S > 1){
-        css += 'html{overflow:hidden;height:' + H + 'px}' +
-               'body{width:' + LW + 'px!important;height:' + LH + 'px!important;overflow:hidden;transform:scale(' + S + ');transform-origin:0 0;position:relative}' +
-               '#app{height:' + LH + 'px!important;max-height:none!important}';
-      }
-      if(MODE === 'zoom' && S > 1){
-        css += 'html{zoom:' + S + '}' +
-               '#app{height:' + LH + 'px!important}';
-      }
-      if(LITE){
-        css += '*{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}' +
-               '.sky-star{animation:none!important}' +
-               'body{background-attachment:scroll!important}';
-      }
+      if(S > 1) css += 'html{overflow:hidden;height:' + H + 'px}' +
+        'body{width:' + LW + 'px!important;height:' + LH + 'px!important;overflow:hidden;transform:scale(' + S + ');transform-origin:0 0;position:relative}' +
+        '#app{height:' + LH + 'px!important;max-height:none!important}';
+      if(!cfg.blur) css += '*{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}';
+      if(!cfg.sky) css += '#sky{display:none!important}';
+      if(!cfg.anim) css += '*,*::before,*::after{animation:none!important;transition:none!important}';
+      if(!cfg.glow) css += '*{filter:none!important;box-shadow:none!important}';
+      if(!cfg.fixedbg) css += 'body{background-attachment:scroll!important}';
       style.textContent = css;
     }
-    if(MODE === 'transform'){
-      try{
-        Object.defineProperty(window, 'innerWidth',  { configurable: true, get: function(){ return S > 1 ? LW : W0(); } });
-        Object.defineProperty(window, 'innerHeight', { configurable: true, get: function(){ return S > 1 ? LH : H0(); } });
-      }catch(e){}
-    }
-    compute();
-    window.addEventListener('resize', function(){ clearTimeout(compute.t); compute.t = setTimeout(compute, 100); });
-    window.addEventListener('orientationchange', function(){ setTimeout(compute, 150); });
+    try{
+      Object.defineProperty(window, 'innerWidth',  { configurable: true, get: function(){ return S > 1 ? LW : W0(); } });
+      Object.defineProperty(window, 'innerHeight', { configurable: true, get: function(){ return S > 1 ? LH : H0(); } });
+    }catch(e){}
+    apply();
+    window.addEventListener('resize', function(){ clearTimeout(apply.t); apply.t = setTimeout(apply, 100); });
+    window.addEventListener('orientationchange', function(){ setTimeout(apply, 150); });
+
+    function measure(ms){ return new Promise(function(res){
+      var n = 0, worst = 0, t0 = performance.now(), prev = t0;
+      (function f(t){ n++; worst = Math.max(worst, t - prev); prev = t;
+        if(t - t0 < ms) requestAnimationFrame(f); else res({ fps: n * 1000 / (t - t0), worst: worst }); })(t0);
+    }); }
+    var wait = function(ms){ return new Promise(function(r){ setTimeout(r, ms); }); };
+
     document.addEventListener('DOMContentLoaded', function(){
       var hud = document.createElement('div');
-      hud.style.cssText = 'position:fixed;right:6px;top:6px;z-index:99999;background:rgba(0,0,0,.72);color:#7CFC9A;font:12px/1.35 ui-monospace,Menlo,monospace;padding:6px 8px;border-radius:8px;pointer-events:none;white-space:pre';
-      document.body.appendChild(hud);
-      var frames = 0, last = performance.now(), worst = 0, prev = last;
-      (function tick(t){
-        frames++; worst = Math.max(worst, t - prev); prev = t;
-        if(t - last >= 1000){
-          hud.textContent = 'FPS ' + Math.round(frames * 1000 / (t - last)) + '  worst ' + Math.round(worst) + 'ms\n' +
-            MODE + (LITE ? '+lite' : '') + '  scale ' + S.toFixed(2) + '\n' +
-            'view ' + Math.round(W0()) + 'x' + Math.round(H0()) + '  layout ' + Math.round(LW) + 'x' + Math.round(LH) + '\n' +
-            'dpr ' + window.devicePixelRatio + '  vv ' + (window.visualViewport ? visualViewport.scale.toFixed(2) : '-');
-          frames = 0; worst = 0; last = t;
+      hud.style.cssText = 'position:fixed;right:6px;top:6px;z-index:99999;background:rgba(0,0,0,.8);color:#7CFC9A;font:13px/1.4 ui-monospace,Menlo,monospace;padding:8px 10px;border-radius:8px;pointer-events:none;white-space:pre';
+      document.documentElement.appendChild(hud);   // outside the scaled body, so it stays readable
+      if(MODE !== 'bench'){
+        (function loop(){ measure(1000).then(function(r){
+          hud.textContent = 'FPS ' + Math.round(r.fps) + '  worst ' + Math.round(r.worst) + 'ms\n' + MODE + (LITE ? '+lite' : '') + '  scale ' + S.toFixed(2) + '\nview ' + Math.round(W0()) + 'x' + Math.round(H0()); loop(); }); })();
+        return;
+      }
+      var runs = [
+        ['1 no scaling, all effects', { scale: false, blur: true, sky: true, anim: true, glow: true, fixedbg: true }],
+        ['2 scaled, all effects',     { scale: true,  blur: true, sky: true, anim: true, glow: true, fixedbg: true }],
+        ['3 scaled, no blur',         { scale: true,  blur: false, sky: true, anim: true, glow: true, fixedbg: true }],
+        ['4 scaled, no sky',          { scale: true,  blur: true, sky: false, anim: true, glow: true, fixedbg: true }],
+        ['5 scaled, no animations',   { scale: true,  blur: true, sky: true, anim: false, glow: true, fixedbg: true }],
+        ['6 scaled, no glows',        { scale: true,  blur: true, sky: true, anim: true, glow: false, fixedbg: true }],
+        ['7 scaled, all effects off', { scale: true,  blur: false, sky: false, anim: false, glow: false, fixedbg: false }]
+      ];
+      var rows = [];
+      (async function(){
+        hud.textContent = 'Benchmark: loading the board…';
+        await wait(3500);
+        try{
+          var G = window.__STARDOKU__, P = G.Store.get();
+          P.seen = Object.assign(P.seen || {}, { dial: true, map: true }); P.voyageLevel = Math.max(P.voyageLevel || 1, 30); G.Store.save();
+          var c = document.getElementById('coach'); if(c) c.classList.remove('active');
+          G.startVoyage();
+        }catch(e){}
+        await wait(4000);
+        try{ var G2 = window.__STARDOKU__; G2.state.solutionCells.slice(0, 2).forEach(function(i){ G2.doubleTap(i); }); }catch(e){}
+        await wait(1200);
+        for(var i = 0; i < runs.length; i++){
+          cfg = runs[i][1]; apply();
+          hud.textContent = 'Benchmark ' + (i + 1) + '/' + runs.length + '\n' + runs[i][0] + '\n(do not touch)';
+          await wait(1200);
+          var r = await measure(3000);
+          rows.push(runs[i][0] + '   ' + ('   ' + Math.round(r.fps)).slice(-3) + ' fps   worst ' + Math.round(r.worst) + 'ms');
         }
-        requestAnimationFrame(tick);
-      })(performance.now());
+        cfg = runs[1][1]; apply();
+        hud.style.fontSize = '15px';
+        hud.textContent = 'STARDOKU iPad benchmark  ' + (W0() > H0() ? 'SIDEWAYS' : 'UPRIGHT') + '  ' + Math.round(W0()) + 'x' + Math.round(H0()) + ' dpr ' + devicePixelRatio + '\n\n' + rows.join('\n') + '\n\nScreenshot this table, please.';
+      })();
     });
   }).toString() + ')(' + JSON.stringify(mode) + ',' + JSON.stringify(lite) + ');</' + 'script>';
   fetch((q.get('src') || 'stardoku.html') + '?t=' + Date.now()).then(function(r){ return r.text(); }).then(function(t){
-    // Strip the old page-side iPad viewport script if this copy still has it.
     t = t.replace(/<script>\s*\/\* iPad \/ large screens\.[\s\S]*?<\/script>\s*/, '');
     t = t.replace('<head>', '<head>' + patch);
     document.open(); document.write(t); document.close();
